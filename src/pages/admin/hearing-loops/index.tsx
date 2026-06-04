@@ -184,62 +184,6 @@ function DeviceDetailModal({
 
         {/* Body */}
         <div className="flex-1 space-y-6 overflow-y-auto scrollbar-thin p-6">
-          {/* 별칭 편집 */}
-          <div className="rounded-xl border border-primary/20 bg-primary/3 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[12px] font-semibold text-primary">히어링루프 별칭</span>
-              {!editingAlias && (
-                <button
-                  onClick={() => { setTempAlias(displayAlias); setAliasError(''); setEditingAlias(true) }}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-dark transition-colors"
-                >
-                  <Pencil className="h-3 w-3" />
-                  수정
-                </button>
-              )}
-            </div>
-            {editingAlias ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={tempAlias}
-                    onChange={(e) => setTempAlias(e.target.value)}
-                    placeholder="별칭을 입력하세요"
-                    className="flex-1 rounded-lg border border-primary/30 bg-white px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    autoFocus
-                    disabled={updateAlias.isPending}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveAlias()
-                      if (e.key === 'Escape') { setTempAlias(displayAlias); setAliasError(''); setEditingAlias(false) }
-                    }}
-                  />
-                  <button
-                    onClick={saveAlias}
-                    disabled={updateAlias.isPending}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
-                  >
-                    {updateAlias.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  </button>
-                  <button
-                    onClick={() => { setTempAlias(displayAlias); setAliasError(''); setEditingAlias(false) }}
-                    disabled={updateAlias.isPending}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page transition-colors disabled:opacity-50"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                {aliasError && (
-                  <p className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-destructive">
-                    <AlertCircle className="h-3 w-3" /> {aliasError}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-[14px] font-bold text-foreground">{hasAlias ? displayAlias : <span className="text-muted-foreground font-normal">별칭 없음 (MAC으로 표시)</span>}</p>
-            )}
-          </div>
-
           {/* 배치된 텔레코일존 — 배정 / 재배치 (목, §9) */}
           <div className="rounded-xl border border-primary/20 bg-primary/3 p-4">
             <div className="flex items-center justify-between mb-2">
@@ -296,6 +240,62 @@ function DeviceDetailModal({
                 <span className="h-1.5 w-1.5 rounded-full bg-warning" />
                 미배정
               </p>
+            )}
+          </div>
+
+          {/* 별칭 편집 */}
+          <div className="rounded-xl border border-primary/20 bg-primary/3 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[12px] font-semibold text-primary">히어링루프 별칭</span>
+              {!editingAlias && (
+                <button
+                  onClick={() => { setTempAlias(displayAlias); setAliasError(''); setEditingAlias(true) }}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-dark transition-colors"
+                >
+                  <Pencil className="h-3 w-3" />
+                  수정
+                </button>
+              )}
+            </div>
+            {editingAlias ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={tempAlias}
+                    onChange={(e) => setTempAlias(e.target.value)}
+                    placeholder="별칭을 입력하세요"
+                    className="flex-1 rounded-lg border border-primary/30 bg-white px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    autoFocus
+                    disabled={updateAlias.isPending}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveAlias()
+                      if (e.key === 'Escape') { setTempAlias(displayAlias); setAliasError(''); setEditingAlias(false) }
+                    }}
+                  />
+                  <button
+                    onClick={saveAlias}
+                    disabled={updateAlias.isPending}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
+                  >
+                    {updateAlias.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={() => { setTempAlias(displayAlias); setAliasError(''); setEditingAlias(false) }}
+                    disabled={updateAlias.isPending}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page transition-colors disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                {aliasError && (
+                  <p className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-destructive">
+                    <AlertCircle className="h-3 w-3" /> {aliasError}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-[14px] font-bold text-foreground">{hasAlias ? displayAlias : <span className="text-muted-foreground font-normal">별칭 없음 (MAC으로 표시)</span>}</p>
             )}
           </div>
 
