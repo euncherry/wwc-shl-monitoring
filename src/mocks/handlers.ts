@@ -1,7 +1,9 @@
 import { http, HttpResponse, bypass } from 'msw'
 import type { DeviceResponseDto, ZoneResponseDto } from '@/types/device'
+import type { FirmwareResponseDto } from '@/types/firmware'
 import { mergeMockFields } from './deviceMock'
 import { mergeZoneMock, mergeZoneDetailMock } from './zoneMock'
+import { mergeFirmwareMock, rememberDescription } from './firmwareMock'
 
 /**
  * MSW 핸들러 — 백엔드에 "아직 없는" API/필드만 처리(CLAUDE.md §3·§10·§13).
@@ -11,6 +13,7 @@ import { mergeZoneMock, mergeZoneDetailMock } from './zoneMock'
  * - GET /devices, GET /devices/:mac → passthrough 후 목 필드(power/network/volume/firmware/alerts) 병합.
  * - GET /zones        → managerEmail 목 병합. (deviceCount/online은 FE 매퍼에서 파생)
  * - GET /zones/:id    → managerEmail + 각 기기 텔레메트리(전원/네트워크/펌웨어) 목 병합.
+ * - GET /firmware     → description(목) 병합. POST /firmware → 업로드 description 보관 후 통과.
  * - 기기 배정 해제(목) → DELETE /devices/:id/zone : 세션 오버라이드로 해제 흉내(백엔드 엔드포인트 없음).
  *   PUT /devices/:id/zone/:zoneId(실연동)는 가로채지 않고 통과시키되, 해제 오버라이드만 정리.
  *
@@ -75,5 +78,31 @@ export const handlers = [
   http.put('*/devices/:id/zone/:zoneId', async ({ request, params }) => {
     unassignedDevices.delete(Number(params.id))
     return fetch(bypass(request))
+  }),
+
+  // 펌웨어 목록: description(목) 병합
+  http.get('*/firmware', async ({ request }) => {
+    const real = await fetch(bypass(request))
+    if (!real.ok) return real
+    const list = (await real.json()) as FirmwareResponseDto[]
+    return HttpResponse.json(list.map(mergeFirmwareMock))
+  }),
+
+  // 펌웨어 업로드(multipart): description(목)을 version 기준으로 보관한 뒤 통과 → 응답에도 병합
+  http.post('*/firmware', async ({ request }) => {
+    let version = ''
+    let description = ''
+    try {
+      const form = await request.clone().formData()
+      version = String(form.get('version') ?? '')
+      description = String(form.get('description') ?? '')
+    } catch {
+      // formData 파싱 실패 시 그대로 통과
+    }
+    const real = await fetch(bypass(request))
+    if (!real.ok) return real
+    if (description) rememberDescription(version, description)
+    const created = (await real.json()) as FirmwareResponseDto
+    return HttpResponse.json(mergeFirmwareMock(created), { status: real.status })
   }),
 ]

@@ -16,6 +16,7 @@ import { UserLayout } from '@/components/layout/UserLayout'
 import AdminDashboard from '@/pages/admin/dashboard'
 import HearingLoopsPage from '@/pages/admin/hearing-loops'
 import TelecoilZonesPage from '@/pages/admin/telecoil-zones'
+import FirmwarePage from '@/pages/admin/firmware'
 import AlertCenterPage from '@/pages/admin/alerts'
 
 /* User pages */
@@ -50,6 +51,7 @@ function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/hearing-loops" element={<HearingLoopsPage />} />
           <Route path="/admin/telecoil-zones" element={<TelecoilZonesPage />} />
+          <Route path="/admin/firmware" element={<FirmwarePage />} />
           <Route path="/admin/alerts" element={<AlertCenterPage />} />
         </Route>
       </Route>

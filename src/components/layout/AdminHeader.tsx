@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Wifi,
   Building2,
+  Cpu,
   Bell,
   LogOut,
 } from 'lucide-react'
@@ -13,6 +14,7 @@ const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: '대시보드' },
   { to: '/admin/hearing-loops', icon: Wifi, label: '히어링루프 관리' },
   { to: '/admin/telecoil-zones', icon: Building2, label: '텔레코일존 관리' },
+  { to: '/admin/firmware', icon: Cpu, label: '펌웨어 관리' },
   { to: '/admin/alerts', icon: Bell, label: '알림센터' },
 ]
 
