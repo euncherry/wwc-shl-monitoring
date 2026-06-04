@@ -24,6 +24,7 @@ import {
   KeyRound,
   Thermometer,
   Cpu,
+  Info,
 } from 'lucide-react'
 import type { ZoneStatus, HearingLoop } from '@/types/device'
 import { formatDateTime } from '@/lib/format'
@@ -57,30 +58,18 @@ function MockBadge() {
   )
 }
 
-/** 존 상태 배지 + 분류 기준 hover 툴팁 (online 비율 파생) */
-function ZoneStatusBadge({ status, total, active }: { status: ZoneStatus; total: number; active: number }) {
+/** 존 상태 배지 (online 비율 파생 — 분류 기준은 상태 필터 헤더의 ⓘ 참고) */
+function ZoneStatusBadge({ status }: { status: ZoneStatus }) {
   const m: Record<ZoneStatus, { label: string; dot: string; cls: string }> = {
     active: { label: '정상', dot: 'bg-success', cls: 'bg-success/10 text-success' },
     warning: { label: '주의', dot: 'bg-warning', cls: 'bg-warning/10 text-warning' },
     inactive: { label: '비활성', dot: 'bg-muted-foreground', cls: 'bg-muted text-muted-foreground' },
   }
   const s = m[status]
-  const reason =
-    total === 0 ? '배정된 기기가 없음'
-      : active === total ? `전체 ${total}대 정상 가동`
-      : active === 0 ? `정상 가동 0대`
-      : `${total}대 중 ${active}대 정상 가동`
   return (
-    <span className={`group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${s.cls}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${s.cls}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {s.label}
-      {/* 툴팁 — 분류 기준 (정상 가동 기기 수 기준, 목) */}
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-foreground px-3 py-2 text-[11px] font-normal text-white shadow-lg group-hover:block">
-        <span className="font-semibold">{reason} → {s.label}</span>
-        <br />
-        정상 가동 기기 수 기준(목) · 전부=정상 / 일부=주의 / 없음·0대=비활성
-        <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-foreground" />
-      </span>
     </span>
   )
 }
@@ -410,7 +399,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-foreground">{zone?.name ?? '…'}</h3>
-                {zone && <ZoneStatusBadge status={zone.status} total={zone.deviceCount} active={zone.activeDeviceCount} />}
+                {zone && <ZoneStatusBadge status={zone.status} />}
               </div>
               <p className="text-[12px] text-muted-foreground">텔레코일존 #{zoneId}</p>
             </div>
@@ -678,7 +667,7 @@ export default function TelecoilZonesPage() {
 
       <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
         {/* Status filter */}
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin border-b border-border px-5 pb-3 pt-4">
+        <div className="flex items-center gap-1 border-b border-border px-5 pb-3 pt-4">
           {(['all', 'active', 'warning', 'inactive'] as const).map((s) => {
             const labels: Record<string, string> = { all: '전체', active: '정상', warning: '주의', inactive: '비활성' }
             const dotColors: Record<string, string> = { all: 'bg-primary', active: 'bg-success', warning: 'bg-warning', inactive: 'bg-muted-foreground' }
@@ -691,6 +680,18 @@ export default function TelecoilZonesPage() {
               </button>
             )
           })}
+
+          {/* 분류 기준 안내 (ⓘ hover) */}
+          <div className="group relative ml-auto shrink-0">
+            <Info className="h-4 w-4 cursor-help text-muted-foreground/50 hover:text-muted-foreground" />
+            <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden w-64 rounded-lg bg-foreground px-3 py-2.5 text-[11px] font-normal leading-relaxed text-white shadow-lg group-hover:block">
+              <span className="font-semibold">상태 분류 기준</span><MockBadge />
+              <span className="mt-1 block">· <span className="font-semibold text-success">정상</span> — 배정 기기 전부 정상 가동</span>
+              <span className="block">· <span className="font-semibold text-warning">주의</span> — 일부만 정상 가동</span>
+              <span className="block">· <span className="font-semibold">비활성</span> — 정상 가동 0대 / 기기 없음</span>
+              <span className="absolute bottom-full right-2 border-4 border-transparent border-b-foreground" />
+            </span>
+          </div>
         </div>
 
         {/* Card grid */}
@@ -715,7 +716,7 @@ export default function TelecoilZonesPage() {
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10"><Building2 className="h-5 w-5 text-primary" /></div>
                         <div className="min-w-0"><p className="truncate text-[14px] font-bold text-foreground">{zone.name}</p></div>
                       </div>
-                      <ZoneStatusBadge status={zone.status} total={zone.deviceCount} active={zone.activeDeviceCount} />
+                      <ZoneStatusBadge status={zone.status} />
                     </div>
 
                     <div className="mb-4">
