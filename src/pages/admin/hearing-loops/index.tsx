@@ -792,7 +792,7 @@ export default function HearingLoopsPage() {
       {/* ─── Page header ─── */}
       <div className="flex items-end justify-between pb-5 pt-5">
         <div>
-          <h2 className="text-2xl font-bold text-foreground tracking-tight">히어링루프 관리</h2>
+          <h2 className="text-2xl font-black text-foreground tracking-tight">히어링루프 관리</h2>
           <p className="text-sm text-muted-foreground mt-2">등록된 히어링루프를 조회하고 관리할 수 있습니다.</p>
         </div>
         <button

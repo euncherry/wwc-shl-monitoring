@@ -104,7 +104,7 @@ export default function UserSupport() {
     <div className="space-y-6">
       {/* ─── Page Header ─── */}
       <div className="pb-2">
-        <h2 className="text-2xl font-bold text-foreground tracking-tight mt-2">
+        <h2 className="text-2xl font-black text-foreground tracking-tight mt-2">
           기술 지원
         </h2>
         <p className="text-sm text-muted-foreground mt-2">

@@ -349,7 +349,7 @@ export default function FirmwarePage() {
   return (
     <div className="space-y-6">
       <div className="pb-5 pt-5">
-        <h2 className="text-2xl font-bold text-foreground tracking-tight">펌웨어 관리</h2>
+        <h2 className="text-2xl font-black text-foreground tracking-tight">펌웨어 관리</h2>
         <p className="text-sm text-muted-foreground mt-2">펌웨어를 업로드하고 기기에 업데이트를 전송합니다.</p>
       </div>
 
@@ -364,8 +364,19 @@ export default function FirmwarePage() {
             className="w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-4 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
           />
         </div>
-        <button onClick={() => setShowUpload(true)} className="ml-auto flex items-center gap-2 rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white shadow-sm hover:bg-primary-dark/90 transition-colors">
-          <Plus className="h-4 w-4" />펌웨어 추가
+        {/* 펌웨어 추가 — 원본 OTA 업데이트 버튼 디자인 재사용 */}
+        <button
+          onClick={() => setShowUpload(true)}
+          className="group relative ml-auto flex items-center gap-3 rounded-2xl border border-transparent pl-4 pr-5 py-2.5 text-[13px] font-bold text-primary-dark shadow-sm transition-all duration-300 cursor-pointer hover:shadow-[0_4px_16px_rgba(36,107,209,0.15)]"
+          style={{ background: 'linear-gradient(135deg, #EDF1F8 0%, #D6E5F8 40%, #DDDAF8 75%, #EDE8F4 100%)' }}
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/70 shadow-sm transition-all">
+            <Plus className="h-4 w-4 text-primary transition-transform duration-300 group-hover:rotate-90" />
+          </div>
+          <div className="flex flex-col items-start leading-none">
+            <span className="text-[13px] font-bold text-primary-dark">펌웨어 추가</span>
+            <span className="mt-0.5 text-[10px] text-primary-dark/40">새 펌웨어 업로드</span>
+          </div>
         </button>
       </div>
 

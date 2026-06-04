@@ -646,9 +646,18 @@ export default function TelecoilZonesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="pb-5 pt-5">
-        <h2 className="text-2xl font-bold text-foreground tracking-tight">텔레코일존 관리</h2>
-        <p className="text-sm text-muted-foreground mt-2">텔레코일존을 등록하고 배치된 히어링루프를 관리합니다.</p>
+      <div className="flex items-end justify-between pb-5 pt-5">
+        <div>
+          <h2 className="text-2xl font-black text-foreground tracking-tight">텔레코일존 관리</h2>
+          <p className="text-sm text-muted-foreground mt-2">텔레코일존을 등록하고 배치된 히어링루프를 관리합니다.</p>
+        </div>
+        <button
+          onClick={() => setShowRegister(true)}
+          className="flex items-center gap-2 rounded-xl bg-primary-dark px-4 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          텔레코일존 등록
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -659,9 +668,6 @@ export default function TelecoilZonesPage() {
         </div>
         <button onClick={() => setSortOrder(sortOrder === 'latest' ? 'oldest' : 'latest')} className="flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors">
           <ArrowUpDown className="h-3.5 w-3.5" />{sortOrder === 'latest' ? '최신순' : '오래된순'}
-        </button>
-        <button onClick={() => setShowRegister(true)} className="ml-auto flex items-center gap-2 rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white shadow-sm hover:bg-primary-dark/90 transition-colors">
-          <Plus className="h-4 w-4" />텔레코일존 등록
         </button>
       </div>
 

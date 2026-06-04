@@ -177,7 +177,7 @@ export default function UserSettings() {
     <div className="space-y-6">
       {/* ─── Page Header ─── */}
       <div className="pb-2">
-        <h2 className="text-2xl font-bold text-foreground tracking-tight mt-2">정보관리</h2>
+        <h2 className="text-2xl font-black text-foreground tracking-tight mt-2">정보관리</h2>
         <p className="text-sm text-muted-foreground mt-2">
           담당자 이메일 및 기관 정보를 확인하고 수정할 수 있습니다.
         </p>

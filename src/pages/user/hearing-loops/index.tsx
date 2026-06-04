@@ -273,7 +273,7 @@ export default function UserHearingLoops() {
     <div className="space-y-6">
       {/* ─── Page Header ─── */}
       <div className="pb-2">
-        <h2 className="text-2xl font-bold text-foreground tracking-tight mt-2">히어링루프 관리</h2>
+        <h2 className="text-2xl font-black text-foreground tracking-tight mt-2">히어링루프 관리</h2>
         <p className="text-sm text-muted-foreground mt-2">
           소속 기관에 등록된 히어링루프의 현재 상태를 조회하고 별칭을 관리할 수 있습니다.
         </p>

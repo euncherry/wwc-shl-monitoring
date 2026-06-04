@@ -460,7 +460,7 @@ export default function AlertCenterPage() {
       {/* ─── Page header ─── */}
       <div className="flex items-center justify-between pb-5 pt-5">
         <div>
-          <h2 className="text-2xl font-bold text-foreground tracking-tight">알림센터</h2>
+          <h2 className="text-2xl font-black text-foreground tracking-tight">알림센터</h2>
           <p className="text-sm text-muted-foreground mt-2">시스템에서 발생한 알림을 관리하고 처리 내역을 추적합니다.</p>
         </div>
         <button
