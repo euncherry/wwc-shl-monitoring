@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import { useAuthStore } from '@/stores/authStore'
 
 /* Auth pages */
@@ -39,6 +40,7 @@ function App() {
   return (
     <>
     <Analytics />
+    <SpeedInsights />
     <Routes>
       {/* ─── Guest routes ─── */}
       <Route element={<GuestRoute />}>
