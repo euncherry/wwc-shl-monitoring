@@ -109,7 +109,7 @@ function DeviceDetailModal({
   const [aliasError, setAliasError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // 배치된 텔레코일존 (미배정이면 배정 — 목, §9)
+  // 배치된 텔레코일존 (미배정이면 배정 — 실연동 PUT /devices/:id/zone/:zoneId)
   const [displayZone, setDisplayZone] = useState<{ id: number; name: string } | null>(
     device.telecoilZoneId && device.telecoilZoneName
       ? { id: Number(device.telecoilZoneId), name: device.telecoilZoneName }
@@ -184,10 +184,10 @@ function DeviceDetailModal({
 
         {/* Body */}
         <div className="flex-1 space-y-6 overflow-y-auto scrollbar-thin p-6">
-          {/* 배치된 텔레코일존 — 배정 / 재배치 (목, §9) */}
+          {/* 배치된 텔레코일존 — 배정 / 재배치 (실연동 PUT /devices/:id/zone/:zoneId) */}
           <div className="rounded-xl border border-primary/20 bg-primary/3 p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-primary">배치된 텔레코일존<MockBadge /></span>
+              <span className="text-[12px] font-semibold text-primary">배치된 텔레코일존</span>
               {!editingZone && (
                 <button
                   onClick={() => { setAssignZoneId(displayZone ? String(displayZone.id) : ''); setEditingZone(true) }}

@@ -185,7 +185,7 @@
 - 등록 `POST /devices` `{ mac_address, zone_id?, alias? }` (**409 = MAC/별칭 중복**) · 일괄 `POST /devices/bulk` `{ devices:[…] }` → `{ created, skipped[] }`
 - 삭제 `DELETE /devices/:id` (**키 = 숫자 id**) · 별칭 `PATCH /devices/:mac { alias }` (**409 = 별칭 중복**)
 - 존 필터 옵션 `GET /zones`
-- (이 페이지 미사용) 상태이력 `GET /devices/:mac/status`, 존배정 `PATCH /devices/:id/zone`
+- (이 페이지 미사용) 상태이력 `GET /devices/:mac/status`, 존배정 **`PUT /devices/:id/zone/:zoneId`**(경로 파라미터, body 없음 — 실연동)
 
 **`DeviceResponseDto`에서 바로 쓰는 실값 (REAL, 배지 없음)**
 - `mac_address`, `alias`(nullable·unique), `zone`/`zone_id`(존 이름까지 옴), `last_temperature`(온도), `last_gpio_state`(동작), `registered_at`(등록일), `last_seen_at`(최근 업데이트), `id`(삭제·존배정 키)
@@ -202,7 +202,8 @@
   - ⚠️ **백엔드 `status`(`PENDING`/`ACTIVE`)와 다름!** DTO의 `status`는 프로비저닝 상태(등록·연결 여부)일 뿐, 건강 뱃지가 아니다. **절대 그대로 색 뱃지에 쓰지 말 것.** 별도 파생 함수 필요.
   - 임계값(기본 5분 등) 미확정 → 백엔드가 `connection_status` 내려주면 파생 로직 제거(BACKEND §3).
 
-### ⚠️ 백엔드 확인 필요 (4단계 존 배정 전)
-- `PATCH /devices/:id/zone`에 **requestBody가 Swagger에 명세돼 있지 않음**(zone_id를 어디로 받는지 불명 — 문서 누락 의심). 이 페이지엔 영향 없으나 존 배정 구현(4단계) 전 백엔드에 확인.
+### ✅ 존 배정 엔드포인트 (2026-06-04 백엔드 코드 확인 — 정정)
+- 실제 엔드포인트는 **`PUT /devices/:id/zone/:zoneId`** (zoneId가 **경로 파라미터**, body 없음, ADMIN). **실연동(목 아님).** 이전의 "requestBody 미명세" 의심은 해소됨 — 라우트 자체가 path param 방식이라 400은 잘못된 호출(PATCH+body) 때문이었음.
+- ⚠️ **배정 해제(미배정 복귀) 엔드포인트는 없음**(`:zoneId` 필수). → 3A에서 만든 MSW 존배정 '목'은 실 `PUT` 호출로 교체해야 하며, 해제 기능은 백엔드 추가 전까지 불가.
 
 > user/hearing-loops는 구현 직전 동일 갭 점검 후 확정.

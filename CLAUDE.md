@@ -176,7 +176,7 @@ KPI 카드 · 상태 뱃지 · 카드 그리드 · 상세 모달 · 인라인 �
 | 텔레코일존 목록/수정/삭제 | **REAL** | `/zones` (이름만) |
 | 텔레코일존+계정 통합 생성 | **MOCK** | 백엔드 통합 엔드포인트 대기 (§10) |
 | 기관 주소/대표번호 | **MOCK** | Zone 확장 대기 |
-| 기기 등록/목록/삭제/존배정 | **REAL** | `/devices`, `/devices/bulk`, `/devices/:id/zone`, `DELETE /devices/:id` |
+| 기기 등록/목록/삭제/존배정 | **REAL** | `/devices`, `/devices/bulk`, `PUT /devices/:id/zone/:zoneId`(존배정), `DELETE /devices/:id` |
 | 기기 상세(MAC·존·등록일·최종업데이트) | **REAL** | `GET /devices/:mac` |
 | 기기 전원/동작/네트워크/볼륨 | **MOCK** | StatusReport 확장 대기 (`gpio_state`→동작만 실값) |
 | 기기 펌웨어 버전 | **MOCK** | 기기별 저장 대기 |
@@ -199,30 +199,37 @@ POST   /auth/login                       { username, password } → { access_tok
 
 POST   /users               (ADMIN)      { username, email, password, name, role?, zone_id? }
 GET    /users               (ADMIN)
+GET    /users/me            (인증)        → 내 프로필 + 소속 zone
 GET    /users/:id           (ADMIN|본인)
-PATCH  /users/:id           (ADMIN|본인) { email?, password? }
+PATCH  /users/:id           (ADMIN|본인) { username?, email?, password? }   // username/email 중복 시 409
 DELETE /users/:id           (ADMIN)
 
-POST   /zones               (ADMIN)      { name }
-GET    /zones               (ADMIN)
+POST   /zones               (ADMIN)      { name }              // CreateZoneDto = { name } 뿐
+GET    /zones               (ADMIN)       → ZoneResponseDto[] (devices[] + user 포함)
 GET    /zones/:id           (ADMIN|배정자)
 PATCH  /zones/:id           (ADMIN)      { name? }
 DELETE /zones/:id           (ADMIN)
 
-POST   /devices             (ADMIN)      { mac_address, zone_id? }
-POST   /devices/bulk        (ADMIN)      { devices: [{ mac_address, zone_id? }] } → { created, skipped }
+POST   /devices             (ADMIN)      { mac_address, zone_id?, alias? }
+POST   /devices/bulk        (ADMIN)      { devices: [{ mac_address, zone_id?, alias? }] } → { created, skipped }
 GET    /devices             (인증)        ADMIN=전체 / ZONE_USER=소속
 GET    /devices/:mac        (ADMIN|구역)
 GET    /devices/:mac/status?page=&limit= → { data, total, page, limit }
-PATCH  /devices/:id/zone    (ADMIN)      { zone_id }
+PATCH  /devices/:mac        (ADMIN|구역)  { alias? }            // alias 중복 시 409
+PUT    /devices/:id/zone/:zoneId (ADMIN)                      // ⚠️ zoneId는 경로 파라미터, body 없음. 실연동(목 아님)
 DELETE /devices/:id         (ADMIN)
 
-POST   /firmware            (ADMIN)      multipart { version, firmware_type?(self|target), file }
+POST   /firmware            (ADMIN)      multipart { version, file }   // description 없음
 GET    /firmware            (ADMIN)
 POST   /firmware/:id/send/:mac (ADMIN)
 ```
 
-응답 필드(현재): 기기는 `{ id, mac_address, zone_id, status(PENDING|ACTIVE), registered_at, last_gpio_state, last_temperature, last_seen_at, zone, created_at }`.
+응답 필드(백엔드 엔티티/DTO 확인):
+- **기기**(`DeviceResponseDto`): `{ id, mac_address, zone_id, alias, status(PENDING|ACTIVE), registered_at, last_gpio_state, last_temperature, last_seen_at, zone, created_at }`
+- **구역**(`ZoneResponseDto`): `{ id, name, devices: DeviceInZoneDto[], user: { id, username, name, role } | null, created_at }`
+- **사용자**(`UserResponseDto`): `{ id, username, email, name, role, zone_id, zone, created_at }`
+
+> ⚠️ `zone.user`에는 **email이 없다**(`username/name/role`만). 담당자 이메일이 필요하면 `GET /users/:id`로 보강.
 
 ---
 
@@ -234,11 +241,11 @@ POST   /firmware/:id/send/:mac (ADMIN)
 - **알림센터** — `GET /alerts`, `GET /alerts/stats`, `PATCH /alerts/:id/forward|close`, `POST /alerts/bulk-forward|bulk-close`, `GET|PATCH /alerts/settings`
   - Alert: `{ id, type, priority, status, message, deviceMac, zoneId, zoneName, createdAt, processedAt, processedBy }`
   - type: `온도 이상|전원 차단|볼륨 이상|연결 끊김|펌웨어 업데이트 필요`, priority: `긴급|경고|정보`, status: `처리대기|전달됨|종결`
-- **기기 별칭** — `PATCH /devices/:id` `{ nickname }`
-- **기기 확장 텔레메트리** — 기기 응답에 목 필드 병합: `power`, `operating`, `networkConnected`, `volume`, `firmwareVersion`
-- **텔레코일존 확장** — `GET /zones` 응답에 `managerEmail`, `userAccount`, `deviceCount`, `activeDeviceCount`, `address`, `phone` 목 병합; 통합 생성 `POST /zones { name, manager_email, username, password, ... }`
-- **펌웨어** — 업로드 시 `description`, 전체 전송 `POST /firmware/:id/broadcast`
-- **정보관리** — 기관 주소/대표번호, 담당자 부서
+- ~~기기 별칭~~ → **REAL로 전환됨**(`PATCH /devices/:mac { alias }`, unique 409). 목 아님.
+- **기기 확장 텔레메트리** — 기기 응답에 목 필드 병합: `power`, `networkConnected`, `volume`, `firmwareVersion` (동작=`last_gpio_state`, 온도=`last_temperature`는 실값이라 제외)
+- **텔레코일존 확장** — `address`, `phone`는 목(Zone 엔티티에 없음). 통합 생성 `POST /zones { name, manager_email, username, password, ... }`는 단일 엔드포인트가 없어 목 또는 FE 오케스트레이션. ※ `deviceCount`/`user`/배정기기는 **REAL**(`GET /zones`가 `devices[]+user` 반환), `managerEmail`은 `zone.user`에 없어 `GET /users/:id` 보강.
+- **펌웨어** — 업로드 시 `description`(엔티티에 없음), 전체 전송 `POST /firmware/:id/broadcast`(엔드포인트 없음)
+- **정보관리** — 기관 주소/대표번호, 담당자 부서(User에 `department` 없음)
 
 ---
 
@@ -306,8 +313,9 @@ src/
 - [ ] User department / username 수정 → 목 제거 — `§6`
 - [ ] Firmware description / 전체 업데이트 → 목 제거 — `§7`
 - [ ] 알림센터 전체 → 목 제거 — `§8`
-- [ ] 연결 상태 산출 / 존 배정 해제 → 파생 로직 제거 — `§3`, `§9`
-- [ ] **기기 존 배정 `PATCH /devices/:id/zone`** → 현재 **목**(요청 body가 Swagger에 미명세, 400 반환). MSW가 세션 오버라이드로 흉내 중(상세 모달 '배정하기'에 '목' 배지). **백엔드가 body(`{ zone_id }`) 확정·문서화하면 MSW 핸들러(`*/devices/:id/zone`) + GET 오버라이드 제거 → 실연동** — `§9`
+- [ ] 연결 상태 산출 → 파생 로직 제거 — `§3`
+- [x] ✅ **기기 존 배정 → 실연동 완료** `PUT /devices/:id/zone/:zoneId`(zoneId 경로 파라미터, body 없음, ADMIN). MSW 존배정 목·오버라이드·'목' 배지 제거함. 브라우저에서 `PUT /devices/1/zone/1 → 200` 확인. — `§9`
+  - ⚠️ **존 배정 해제(미배정으로 되돌리기)는 엔드포인트 없음** — `:zoneId`가 필수 경로 파라미터(null 불가). 해제 기능이 필요하면 백엔드 추가 요청. (재배치=다른 존으로 PUT은 가능)
 - [ ] 관리자 대시보드 상세 명세 확정 — `§11`
 - [ ] online 판정 임계값(기본 5분) 확정 — `§3`
 
@@ -343,7 +351,7 @@ src/
 - **3A. 히어링루프 관리** — `src/pages/admin/hearing-loops/index.tsx`. 상세 확정안은 §아래 "3A 확정" 및 `docs/REQUIREMENTS.md` 참조.
   - 데이터: `GET /devices`·`GET /devices/:mac`(REAL), 등록 `POST /devices`+`/bulk`, 삭제 `DELETE /devices/:id`, 별칭 `PATCH /devices/:mac`(409). 목 병합: power/network/volume/기기별fw(+'목' 배지). 상태 뱃지는 `last_seen_at` **파생**(백엔드 `status`=PENDING/ACTIVE와 다름).
   - 제거: OTA 탭/버튼·미배정 탭·상세모달 제어요소(조회 전용화). 식별자=alias‖MAC(friendly id 폐기). 텔레코일존 필터 추가(`GET /zones`).
-- **3B. 텔레코일존 관리** — 존 CRUD `GET/POST/PATCH/DELETE /zones`, 사용자 계정 생성/PW **재설정**(`/users`), 기기 배정/해제(`PATCH /devices/:id/zone` ⚠️Swagger에 body 명세 누락→백엔드 확인), 알림 이력. 목: 통합생성(`POST /zones {name,manager_email,username,password,…}`)·주소/대표번호·카드 집계.
+- **3B. 텔레코일존 관리** — 존 CRUD `GET/POST/PATCH/DELETE /zones`, 사용자 계정 생성/PW **재설정**(`/users`), 기기 배정 `PUT /devices/:id/zone/:zoneId`(**실연동**, 경로 파라미터). 알림 이력은 목. ⚠️ **배정 해제 엔드포인트 없음**(zoneId 필수)·**담당자 이메일은 `zone.user`에 없어 `GET /users/:id` 보강**. 목: 통합생성(존+계정 한 폼 — 단일 엔드포인트 없음 → FE 오케스트레이션[POST /zones→POST /users] 또는 목)·주소/대표번호. 카드 집계(deviceCount=`zone.devices.length`)는 **REAL**.
 - **3C. 펌웨어 관리** — `POST/GET /firmware`, 개별 전송 `POST /firmware/:id/send/:mac`(REAL). 목: `description`, 전체 전송(`/firmware/:id/broadcast`).
 - **3D. 알림센터** — **전부 MSW 목**(§10 `/alerts*`, 백엔드 전무).
 - **3E. 관리자 대시보드** ⛔ — 존별 요약·미배정 배정 중심. **보류: 구현 전 질문 후 진행**(§11 명세 확정).
@@ -363,3 +371,13 @@ src/
 - **별칭**: 필드명 `nickname`이 아니라 **`alias`**, **unique(409)**, `PATCH /devices/:mac`, **실연동(목 아님)**, 관리자+소속 구역 사용자 모두 가능.
 - **`GET /users/me`**, **`username` 수정** 실연동(이미 구현). → §8의 "username 목/제한"은 무효.
 - **CORS**: 백엔드가 `localhost:5173` 허용 예정 → Vite 포트 **5173 고정**.
+
+### 📌 백엔드 코드 직접 분석 보정 (2026-06-04, `hearingloop-server` 엔티티·컨트롤러 확인)
+실제 백엔드 소스/`docs/FRONTEND_CLAUDE.md`와 대조한 확정 사실. 충돌 시 이쪽 우선:
+- 🔴 **존 배정 = `PUT /devices/:id/zone/:zoneId`** (zoneId 경로 파라미터, **body 없음**, ADMIN). **실연동(목 아님).** 이전 `PATCH /devices/:id/zone {zone_id}` 표기는 오류. → **3A의 MSW 존배정 목을 실 `PUT` 호출로 교체 필요**(§13).
+  - **배정 해제 엔드포인트 없음**(`:zoneId` 필수, null 불가). 미배정으로 되돌리기는 백엔드 추가 필요.
+- **확정 목(엔티티에 필드/모듈 없음)**: Zone에 `address`/`phone`/`manager_email` 없음 · User에 `department` 없음 · Device에 `power`/`network`/`volume`/펌웨어버전 없음 · **알림(Alert) 모듈 자체가 없음**(알림센터 전부 목) · Firmware에 `description` 없고 broadcast 엔드포인트 없음 · 존+계정 **통합 생성 단일 엔드포인트 없음**(POST /zones는 `{name}`만).
+- **확정 실값**: `last_gpio_state`(동작)·`last_temperature`(온도)·`alias`(unique)·`last_seen_at` · `GET /zones`가 `devices[]+user` 반환(deviceCount·배정기기·담당계정 REAL).
+- **`device_error_log` 엔티티는 존재**하나 **조회 엔드포인트가 없어** FE가 'error' 상태를 파생할 수 없음(여전히 normal/warning/offline만 파생 가능).
+- **`zone.user`에 email 없음** → 담당자 이메일은 `GET /users/:id` 보강.
+- 백엔드가 `docs/FRONTEND_CLAUDE.md`를 최신 유지 중 — 의심스러우면 그 문서/Swagger를 확인.

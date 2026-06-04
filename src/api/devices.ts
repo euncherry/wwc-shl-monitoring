@@ -45,9 +45,9 @@ export const devicesApi = {
     return data
   },
 
-  /** PATCH /devices/:id/zone { zone_id } — 존 배정. ⚠️ body 미명세(목, §9). 키는 숫자 id */
+  /** PUT /devices/:id/zone/:zoneId — 존 배정(실연동). zoneId는 경로 파라미터, body 없음. ADMIN. 키는 숫자 id */
   assignZone: async (id: number, zoneId: number) => {
-    const { data } = await apiClient.patch<DeviceApiResponse>(`/devices/${id}/zone`, { zone_id: zoneId })
+    const { data } = await apiClient.put<DeviceApiResponse>(`/devices/${id}/zone/${zoneId}`)
     return data
   },
 }
