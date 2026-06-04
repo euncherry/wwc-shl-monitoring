@@ -65,12 +65,27 @@ export function useUpdateAlias() {
   })
 }
 
-/** 존 배정 (PATCH /devices/:id/zone) — 목(§9) */
+/** 존 배정 (PUT /devices/:id/zone/:zoneId) — 실연동 */
 export function useAssignZone() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, zoneId }: { id: number; zoneId: number }) =>
       devicesApi.assignZone(id, zoneId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: deviceKeys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: deviceKeys.all })
+      qc.invalidateQueries({ queryKey: ['zones'] })
+    },
+  })
+}
+
+/** 존 배정 해제 (DELETE /devices/:id/zone) — 목(§13, 백엔드 엔드포인트 없음) */
+export function useUnassignZone() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => devicesApi.unassignZone(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: deviceKeys.all })
+      qc.invalidateQueries({ queryKey: ['zones'] })
+    },
   })
 }

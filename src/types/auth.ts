@@ -49,3 +49,15 @@ export interface MeResponse {
   zone?: { id: number; name: string } | null
   department?: string
 }
+
+/** UserResponseDto — POST/GET/PATCH /users 응답 */
+export interface UserResponseDto {
+  id: number
+  username: string
+  email: string
+  name: string
+  role: BackendRole
+  zone_id: number | null
+  zone?: { id: number; name: string } | null
+  created_at: string
+}

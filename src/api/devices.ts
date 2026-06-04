@@ -50,4 +50,9 @@ export const devicesApi = {
     const { data } = await apiClient.put<DeviceApiResponse>(`/devices/${id}/zone/${zoneId}`)
     return data
   },
+
+  /** 배정 해제(목) — 백엔드 엔드포인트 없음. MSW DELETE /devices/:id/zone로 흉내(§13). */
+  unassignZone: async (id: number) => {
+    await apiClient.delete(`/devices/${id}/zone`)
+  },
 }

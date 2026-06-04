@@ -23,8 +23,9 @@ function hashMac(mac: string): number {
   return h
 }
 
-/** 기기 하나에 대한 목 필드 (power/network/volume/firmware/alerts) */
-export function mockFieldsFor(dto: DeviceResponseDto) {
+/** 기기 하나에 대한 목 필드 (power/network/volume/firmware/alerts).
+ *  DeviceResponseDto·DeviceInZoneDto 모두 받도록 필요한 필드만 좁게 받는다. */
+export function mockFieldsFor(dto: { mac_address: string; last_seen_at: string | null; created_at: string }) {
   const h = hashMac(dto.mac_address)
   const alertCount = h % 3 // 0~2개
   const occurredAt = dto.last_seen_at ?? dto.created_at

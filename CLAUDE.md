@@ -304,7 +304,10 @@ src/
 `BACKEND_REQUIREMENTS.md`의 항목이 staging에 배포되면 해당 MSW 핸들러를 제거한다.
 
 - [ ] **CORS** 적용 확인 (이게 안 되면 실연동 전부 불가) — `§0`
-- [ ] 텔레코일존+계정 통합 생성 → 목 제거 — `§5-2`
+- [ ] ✅ **[3B 확정] 텔레코일존+계정 통합 생성** (2026-06-04 사용자 최종 결정) — **계정은 선택(optional)**. 등록 UI 유지 + **FE 오케스트레이션**: `POST /zones {name}` 성공 후, 계정 정보가 입력됐으면 `POST /users {…, zone_id, role:ZONE_USER}`를 **한 번 더** 호출. 계정 비우면 존만 생성하고 **상세 모달에서 나중에 계정 생성** 가능. **'목' 표시**(통합 트랜잭션 엔드포인트 대기 — 배포되면 단일 호출로 교체, 이때 '목' 배지 제거). 1:1 관계는 백엔드 `Zone↔User` OneToOne으로 보장. — `§5-2`
+- [ ] 🟡 **[3B] `GET /zones` 응답 보강 요청(목)** — user는 **email만** 필요(현재 `id/username/name/role`만 옴, email 없음) · device는 **`deviceCount`(포함 장비 수) + `activeDeviceCount`(정상 가동 수)** 추가 요청. FE 우회: deviceCount=`devices.length`, activeCount=online 파생(last_seen), managerEmail=목. 카드의 **알림 수 stat 제거**(전체장비/정상가동만).
+- [ ] 🟡 **[3B] `GET /zones/:id` 응답 보강 요청(목)** — 포함 히어링루프에 **전원/네트워크/온도/펌웨어** 추가 요청. FE 우회: 목 병합(온도만 실값 `last_temperature`).
+- [ ] 🟡 **[3B] 기기 배정 해제 엔드포인트 요청** — 현재 없음(`PUT /devices/:id/zone/:zoneId`는 배정·재배치만). 해제는 **'목'으로 구현**(세션 오버라이드). 백엔드 추가 시 실연동.
 - [ ] 기관 주소/대표번호(Zone 확장) → 목 제거 — `§5-1`
 - [ ] 기기 별칭(nickname) → 목 제거 — `§4`
 - [ ] StatusReport 확장(power/operating/network/volume) → **MSW 핸들러 제거 + 화면의 '목' 배지도 제거** — `§1`
@@ -313,7 +316,9 @@ src/
 - [ ] User department / username 수정 → 목 제거 — `§6`
 - [ ] Firmware description / 전체 업데이트 → 목 제거 — `§7`
 - [ ] 알림센터 전체 → 목 제거 — `§8`
-- [ ] 연결 상태 산출 → 파생 로직 제거 — `§3`
+- [ ] 🔴 **연결 상태(online/offline) — 신뢰 신호 없음, 백엔드 요청 필요** — MQTT 프로토콜상 `StatusReport`는 **이벤트 기반**(부팅·GPIO 변화·업데이트·`query_status`)이라 **주기 heartbeat가 없음**. 따라서 `last_seen_at`은 online 판정에 **부적합**(살아있어도 GPIO 안 바뀌면 갱신 안 됨). 진짜 online은 **MQTT 연결(LWT/keepalive)** 인데 백엔드가 `connection_status`로 안 내려줌. → **백엔드에 "정상 가동(online) 기기 수" 또는 `connection_status` 요청.** 받으면 §아래 목 제거.
+- [ ] 🟡 **[3B] 정상가동·가동률·존상태 = 목** — 위 이유로 `activeDeviceCount`를 **MSW 목**(기기 카드 '전원(목)'과 같은 소스)으로 채움. 가동률=`active/total`, 존상태(정상/주의/비활성)도 이 목 기준. 카드·상세에 '목' 배지. 백엔드 "정상 가동 기기 수" 내려오면 `zoneMock`의 `mockActiveCount` 제거 + 배지 제거. (전체 장비 수=`devices.length`는 실값)
+- [ ] 🟡 **온도(`last_temperature`)** — 프로토콜 명세상 **현재 펌웨어가 0.0 고정 전송**. 실 센서값 아님(staging 20.8°C는 시드/테스트 데이터 가능성 — 확인 필요). gpio_state(동작)만 진짜 실시간 실값.
 - [x] ✅ **기기 존 배정 → 실연동 완료** `PUT /devices/:id/zone/:zoneId`(zoneId 경로 파라미터, body 없음, ADMIN). MSW 존배정 목·오버라이드·'목' 배지 제거함. 브라우저에서 `PUT /devices/1/zone/1 → 200` 확인. — `§9`
   - ⚠️ **존 배정 해제(미배정으로 되돌리기)는 엔드포인트 없음** — `:zoneId`가 필수 경로 파라미터(null 불가). 해제 기능이 필요하면 백엔드 추가 요청. (재배치=다른 존으로 PUT은 가능)
 - [ ] 관리자 대시보드 상세 명세 확정 — `§11`
