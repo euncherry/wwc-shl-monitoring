@@ -4,7 +4,6 @@ import { useAuthStore } from '@/stores/authStore'
 
 /* Auth pages */
 import LoginPage from '@/pages/auth/LoginPage'
-import SignUpPage from '@/pages/auth/SignUpPage'
 
 /* Layout & Guards */
 import { GuestRoute } from '@/components/layout/GuestRoute'
@@ -18,7 +17,6 @@ import AdminDashboard from '@/pages/admin/dashboard'
 import HearingLoopsPage from '@/pages/admin/hearing-loops'
 import TelecoilZonesPage from '@/pages/admin/telecoil-zones'
 import AlertCenterPage from '@/pages/admin/alerts'
-import ActivityLogPage from '@/pages/admin/activity-log'
 
 /* User pages */
 import UserDashboard from '@/pages/user/dashboard'
@@ -44,7 +42,6 @@ function App() {
       {/* ─── Guest routes ─── */}
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
       </Route>
 
       {/* ─── Admin routes ─── */}
@@ -54,7 +51,6 @@ function App() {
           <Route path="/admin/hearing-loops" element={<HearingLoopsPage />} />
           <Route path="/admin/telecoil-zones" element={<TelecoilZonesPage />} />
           <Route path="/admin/alerts" element={<AlertCenterPage />} />
-          <Route path="/admin/activity-log" element={<ActivityLogPage />} />
         </Route>
       </Route>
 

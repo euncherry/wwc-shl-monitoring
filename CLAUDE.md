@@ -300,12 +300,14 @@ src/
 - [ ] 텔레코일존+계정 통합 생성 → 목 제거 — `§5-2`
 - [ ] 기관 주소/대표번호(Zone 확장) → 목 제거 — `§5-1`
 - [ ] 기기 별칭(nickname) → 목 제거 — `§4`
-- [ ] StatusReport 확장(power/operating/network/volume) → 목 제거 — `§1`
+- [ ] StatusReport 확장(power/operating/network/volume) → **MSW 핸들러 제거 + 화면의 '목' 배지도 제거** — `§1`
+      (전원·네트워크·볼륨·펌웨어버전은 현재 목 값에 '목' 배지를 달아 표시 중. 실값 내려오면 배지와 핸들러를 같이 걷어낸다. 온도·동작은 이미 실값(last_temperature/gpio)이라 배지 없음.)
 - [ ] 기기별 펌웨어 버전 → 목 제거 — `§2`
 - [ ] User department / username 수정 → 목 제거 — `§6`
 - [ ] Firmware description / 전체 업데이트 → 목 제거 — `§7`
 - [ ] 알림센터 전체 → 목 제거 — `§8`
 - [ ] 연결 상태 산출 / 존 배정 해제 → 파생 로직 제거 — `§3`, `§9`
+- [ ] **기기 존 배정 `PATCH /devices/:id/zone`** → 현재 **목**(요청 body가 Swagger에 미명세, 400 반환). MSW가 세션 오버라이드로 흉내 중(상세 모달 '배정하기'에 '목' 배지). **백엔드가 body(`{ zone_id }`) 확정·문서화하면 MSW 핸들러(`*/devices/:id/zone`) + GET 오버라이드 제거 → 실연동** — `§9`
 - [ ] 관리자 대시보드 상세 명세 확정 — `§11`
 - [ ] online 판정 임계값(기본 5분) 확정 — `§3`
 
@@ -333,22 +335,28 @@ src/
 - `LoginPage` 데모힌트 "비밀번호 아무거나" → `admin/admin1234`로 수정(마크업·className은 유지)
 - 라우트/페이지 정리: `/signup`, `/admin/activity-log` 제거(§7·§11), 관련 `data/*.ts`(`activityLogs.ts`) 제거
 
-### 3단계 — 기기 도메인 실연동
-- `useDevices`/`useDevice(mac)`/`useDeviceStatus` 훅(React Query) → `GET /devices`, `GET /devices/:mac`, `GET /devices/:mac/status`
-- 히어링루프 관리(admin/user) + 상세 모달이 훅을 소비하도록 데이터 소스만 교체
-- **별칭(alias)은 실연동**: `PATCH /devices/:mac { alias }`(관리자+소속 구역 사용자), unique 409 에러 처리. ※ 목 아님.
-- 기기 등록/삭제/존 배정: `POST /devices`(+`/bulk`), `DELETE /devices/:id`, `PATCH /devices/:id/zone` ⚠️ 키가 수정=`:mac`, 배정/삭제=`:id`로 혼재.
-- 목으로 남는 것: power/operating/network/volume(StatusReport 확장 대기), 기기별 펌웨어 버전 → MSW로 응답 병합. status(normal/warning/error/offline)는 `last_seen_at` 파생.
+> **분할 원칙(2026-06-04 갱신):** 도메인별이 아니라 **역할별**로 간다. 사용자(ZONE_USER) 페이지는 관리자가 존+계정+기기 배정을 만들어야 로그인·데이터가 생기므로 **관리자 전체(3단계)를 끝낸 뒤 사용자(4단계)** 를 한다. 각 sub 착수 전 사용자에게 먼저 질문한다. 대시보드 2개는 명세 확정 전까지 ⛔ 보류.
 
-### 4단계 — 존 / 유저 / 펌웨어 / 정보관리
-- 텔레코일존: `GET/PATCH/DELETE /zones` 실연동. 카드 집계(deviceCount 등)·통합 생성(`POST /zones {name, manager_email, username, password,...}`)·주소/대표번호는 **MSW 목**(§10).
-- 유저: `/users` 실연동. `username` 수정·`/users/me`는 실연동(BACKEND_REQUIREMENTS ✅), `department`는 목. PW는 **재설정**만.
-- 펌웨어: `/firmware`, `/firmware/:id/send/:mac` 실연동. `description`·전체 전송(`/firmware/:id/broadcast`)은 목.
-- 정보관리(user): 기관 주소/대표번호·담당자 부서 목.
+### 3단계 — 관리자(admin) 전체
+공통 배관은 각 sub에서 필요한 만큼 점진 추가(3A `api/devices`+`useDevices`, 3B `api/zones`·`api/users`, 3C `api/firmware`…).
 
-### 5단계 — 알림센터(목) + 대시보드 집계
-- 알림센터 전체 MSW 목(§10 `/alerts*`).
-- 관리자/사용자 대시보드: `GET /devices` 결과로 FE 집계(KPI/가동률). 관리자 대시보드 상세 명세는 확정 후(§11).
+- **3A. 히어링루프 관리** — `src/pages/admin/hearing-loops/index.tsx`. 상세 확정안은 §아래 "3A 확정" 및 `docs/REQUIREMENTS.md` 참조.
+  - 데이터: `GET /devices`·`GET /devices/:mac`(REAL), 등록 `POST /devices`+`/bulk`, 삭제 `DELETE /devices/:id`, 별칭 `PATCH /devices/:mac`(409). 목 병합: power/network/volume/기기별fw(+'목' 배지). 상태 뱃지는 `last_seen_at` **파생**(백엔드 `status`=PENDING/ACTIVE와 다름).
+  - 제거: OTA 탭/버튼·미배정 탭·상세모달 제어요소(조회 전용화). 식별자=alias‖MAC(friendly id 폐기). 텔레코일존 필터 추가(`GET /zones`).
+- **3B. 텔레코일존 관리** — 존 CRUD `GET/POST/PATCH/DELETE /zones`, 사용자 계정 생성/PW **재설정**(`/users`), 기기 배정/해제(`PATCH /devices/:id/zone` ⚠️Swagger에 body 명세 누락→백엔드 확인), 알림 이력. 목: 통합생성(`POST /zones {name,manager_email,username,password,…}`)·주소/대표번호·카드 집계.
+- **3C. 펌웨어 관리** — `POST/GET /firmware`, 개별 전송 `POST /firmware/:id/send/:mac`(REAL). 목: `description`, 전체 전송(`/firmware/:id/broadcast`).
+- **3D. 알림센터** — **전부 MSW 목**(§10 `/alerts*`, 백엔드 전무).
+- **3E. 관리자 대시보드** ⛔ — 존별 요약·미배정 배정 중심. **보류: 구현 전 질문 후 진행**(§11 명세 확정).
+
+> 3A·3B까지가 "의미 있는 최소"(기기+존+계정) — 여기까지면 사용자 계정으로 로그인해 실데이터 확인 가능.
+
+### 4단계 — 사용자(user) 전체
+> 3단계로 만든 실데이터 위에서 구현. **관리자 끝낸 뒤 시작.** 착수 직전 user 페이지 갭 점검 먼저.
+
+- **4A. 히어링루프 관리** — `GET /devices`(ZONE_USER=소속 기기만 자동 필터). 상태 KPI·검색·카드·상세(조회+별칭 편집, 소속 구역 사용자도 `PATCH /devices/:mac` 가능). 목/파생은 3A와 동일.
+- **4B. 정보관리** — 담당자 이메일 편집(`PATCH /users/:id`, `/users/me`). 기관 주소/대표번호·부서는 **목**.
+- **4C. 기술 지원** — YouTube 임베드·연락처. **정적**(백엔드 불필요, FE 상수).
+- **4D. 사용자 대시보드** ⛔ — **보류: 구현 전 질문 후 진행**. KPI/가동률은 `GET /devices` 집계.
 
 ### 📌 점검 보정 메모 (2026-06 기준, `BACKEND_REQUIREMENTS.md` 최신 반영)
 아래는 본 문서 §8·§10·§13의 옛 표기를 덮어쓴다(문서 본문은 추후 일괄 정리):

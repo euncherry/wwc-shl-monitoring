@@ -8,7 +8,7 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -18,7 +18,7 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
 
-    if (!email.trim()) {
+    if (!username.trim()) {
       setError('아이디를 입력해주세요.')
       return
     }
@@ -28,17 +28,15 @@ export default function LoginPage() {
     }
 
     setIsLoading(true)
-    await new Promise((r) => setTimeout(r, 600))
 
-    const result = login(email, password)
+    const result = await login(username.trim(), password)
 
     if (result.success) {
       navigate('/', { replace: true })
     } else {
       setError(result.error ?? '로그인에 실패했습니다.')
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   return (
@@ -65,8 +63,8 @@ export default function LoginPage() {
             <input
               type="text"
               placeholder="아이디를 입력해 주세요."
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3.5 text-sm text-foreground placeholder:text-gray-400 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10"
               autoComplete="username"
             />
@@ -150,8 +148,8 @@ export default function LoginPage() {
         <div className="mt-10 rounded-lg bg-main-blue-1/40 border border-main-blue-1 p-4">
           <p className="text-xs font-medium text-primary-dark/60 mb-2">데모 계정</p>
           <div className="space-y-1 text-xs text-muted-foreground">
-            <p>관리자: <span className="font-mono font-semibold text-primary-dark">admin</span> / 비밀번호 아무거나</p>
-            <p>사용자: <span className="font-mono font-semibold text-primary-dark">user</span> / 비밀번호 아무거나</p>
+            <p>관리자: <span className="font-mono font-semibold text-primary-dark">admin</span> / <span className="font-mono font-semibold text-primary-dark">admin1234</span></p>
+            <p>사용자 계정은 관리자가 발급합니다.</p>
           </div>
         </div>
       </div>
