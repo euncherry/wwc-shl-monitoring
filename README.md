@@ -1,209 +1,11 @@
-# 히어링루프 모니터링 시스템
+# 히어링루프 모니터링 프론트엔드
 
-공공시설에 설치된 히어링루프 장비의 상태를 실시간으로 모니터링하고 관리하는 웹 기반 플랫폼입니다.
+공공시설에 설치된 **ESP32 히어링루프 기기**의 상태를 모니터링·관리하는 웹 애플리케이션입니다.
+NestJS 백엔드(AWS staging)와 **실연동**하며, 백엔드에 아직 없는 API는 **MSW 목(mock)** 으로 흉내 내는 하이브리드 구조입니다.
 
-**배포 URL** : https://wwc-monitoring-platform.vercel.app
+> 원본 프로토타입([`wwc-monitoring-platform`](./docs/README.original.md))의 UI를 그대로 재사용하되, **데이터 레이어만 실연동 + 목으로 교체**한 버전입니다.
 
----
-
-## 사용자 역할
-
-시스템은 **관리자(Admin)** 와 **사용자(User)** 두 가지 역할로 구분됩니다.
-
-| 구분 | 역할 | 데이터 범위 | 메뉴 구성 |
-|------|------|-------------|-----------|
-| **관리자** | 전체 텔레코일존과 히어링루프를 통합 운영 | 전체 기관·기기 | 대시보드, 히어링루프 관리, 텔레코일존 관리, 알림센터, 활동 로그 |
-| **사용자** | 소속 기관의 히어링루프를 모니터링 | 소속 기관의 기기만 | 대시보드, 히어링루프 관리, 정보관리, 기술 지원 |
-
-### 데모 계정
-
-| 역할 | 아이디 | 비밀번호 |
-|------|--------|----------|
-| 관리자 | `admin` | 아무 값 |
-| 사용자 | `user` | 아무 값 |
-
----
-
-## 핵심 개념
-
-### 텔레코일존 = 기관
-
-텔레코일존과 기관은 동일한 단위입니다. 역할에 따라 부르는 명칭이 다릅니다.
-
-- **관리자** 시점 : 여러 기관을 관리하므로 **"텔레코일존"** 이라 부름
-- **사용자** 시점 : 본인이 속한 하나의 기관이므로 **"우리 기관"** 이라 부름
-
-### 별칭(Nickname) 시스템
-
-히어링루프 기기에 사용자가 별칭을 부여할 수 있습니다.
-
-- 별칭이 지정된 경우 : **별칭**이 메인 타이틀, `기기 ID`가 서브 태그로 표시
-- 별칭이 미지정인 경우 : **기기 ID**가 메인 타이틀로 표시 (동일한 레이아웃)
-
----
-
-## 라우팅 구조
-
-```
-/login                    로그인
-/signup                   회원가입
-
-/admin                    관리자 대시보드
-/admin/hearing-loops      히어링루프 관리
-/admin/telecoil-zones     텔레코일존 관리
-/admin/alerts             알림센터
-/admin/activity-log       활동 로그
-
-/user                     사용자 대시보드
-/user/hearing-loops       히어링루프 관리
-/user/settings            정보관리
-/user/support             기술 지원
-```
-
----
-
-## 페이지별 기능 명세
-
-### 로그인
-
-> 역할 기반 인증 및 라우팅 분기
-
-![로그인](./docs/images/login.png)
-
-- 아이디 / 비밀번호 입력
-- 비밀번호 표시/숨김 토글
-- 역할에 따라 관리자(`/admin`) 또는 사용자(`/user`) 화면으로 자동 분기
-- 로그인 실패 시 에러 메시지 표시
-
----
-
-### 관리자
-
-#### 대시보드
-
-> 전체 시스템 현황을 한눈에 파악
-
-![관리자 대시보드](./docs/images/admin-dashboard.png)
-
-- 전체 장비 지도뷰
-- 텔레코일존별 요약 테이블 (기기 수, 가동률, 상태)
-- 미배정 기기 목록 및 배정 기능
-- 최근 활동 타임라인
-- 최신 펌웨어 정보 및 OTA 업데이트 버튼
-
-#### 히어링루프 관리
-
-> 전체 히어링루프 기기의 상태 조회, 제어, OTA 업데이트
-
-![관리자 히어링루프 관리](./docs/images/admin-hearing-loops.png)
-
-- **탭 구분** : 전체 히어링루프 / 미배정 기기 / OTA 업데이트
-- 기기 ID, 텔레코일존, MAC 주소 검색
-- 상태 필터 (전체, 정상, 경고, 오류, 오프라인) 및 정렬
-- 기기 상세 모달
-  - 별칭 편집
-  - 전원 토글, 볼륨 조절
-  - 온도·펌웨어·네트워크 상태 조회
-  - 알림 이력 확인
-- OTA 탭에서 개별·전체 펌웨어 업데이트
-
-#### 텔레코일존 관리
-
-> 텔레코일존(기관) 등록, 조회, 상세 관리
-
-![관리자 텔레코일존 관리](./docs/images/admin-telecoil-zones.png)
-
-- 텔레코일존 카드 그리드 (가동률, 기기 수, 알림 수)
-- 상태 필터 (전체, 정상, 주의, 비활성)
-- 텔레코일존 등록 모달 (존명, 담당자 이메일, 사용자 계정 생성)
-- 텔레코일존 상세 모달
-  - 담당자 이메일 수정
-  - 사용자 모드 계정 생성 및 관리
-  - 배정된 히어링루프 목록 조회
-  - 히어링루프 추가 배정
-  - 알림 이력 확인
-
-#### 알림센터
-
-> 시스템 알림의 조회, 필터링, 처리(전달·종결)
-
-![관리자 알림센터](./docs/images/admin-alerts.png)
-
-- KPI 카드 (전체 알림, 처리 대기, 긴급 알림, 오늘 발생)
-- **처리 상태 탭** : 처리 대기 / 사용자에게 전달됨 / 관리자 종결 / 전체
-- 유형 필터 (온도 이상, 전원 차단, 볼륨 이상, 연결 끊김, 펌웨어 업데이트 필요)
-- 우선순위 필터 (긴급, 경고, 정보)
-- 알림 상세 모달 (사용자에게 전달 / 무시·종결)
-- 일괄 전달 및 일괄 종결
-- 알림 설정 (온도·볼륨 임계값, 알림 그룹핑, 자동 에스컬레이션 시간)
-
-#### 활동 로그
-
-> 시스템 전체 활동을 기록하고 추적
-
-![관리자 활동 로그](./docs/images/admin-activity-log.png)
-
-- KPI 카드 (오늘 활동, 이번 주, 이번 달, 전체 기록)
-- 활동 기록 테이블 (시간, 사용자, 액션, 대상, 설명, 심각도, IP 주소)
-- 필터 : 사용자별 / 액션 유형별 (제어, 수정, 삭제, 생성, 전달, 종결) / 대상별 (디바이스, 히어링루프, 텔레코일존, 알림, 사용자)
-- 정렬 (최신순 / 오래된순)
-- 로그 내보내기
-- 실시간 로그 스트림 (터미널 뷰, INFO/WARN/ERROR/DEBUG 레벨 구분)
-
----
-
-### 사용자
-
-#### 대시보드
-
-> 소속 기관 히어링루프의 전체 현황 파악
-
-![사용자 대시보드](./docs/images/user-dashboard.png)
-
-- 환영 배너 (기관명, 기기 수, 가동 수, 오늘 알림 수)
-- 기관 히어링루프 KPI (전체 / 정상 가동 / 오프라인 / 경고)
-- 가동률 프로그레스 바
-- 장비별 실시간 상태 목록 (전원, 네트워크, 상태 뱃지)
-- 오늘 발생 알림 요약
-- 시스템 상태 메시지
-- 최근 알림 시간 및 통계
-
-#### 히어링루프 관리
-
-> 소속 기관 히어링루프의 상태 조회 및 별칭 관리
-
-![사용자 히어링루프 관리](./docs/images/user-hearing-loops.png)
-
-- 상태 KPI 카드 (전체, 정상, 경고, 오류/오프라인)
-- 기기 ID, 별칭, MAC 주소 검색
-- 기기 카드 목록 (전원·네트워크·동작 상태 표시)
-- 기기 상세 모달
-  - 별칭 편집 (Enter 저장, Esc 취소)
-  - 전원·네트워크·기기 동작 상태 조회
-  - 텔레코일존·MAC·등록일·최종 업데이트 정보
-
-#### 정보관리
-
-> 소속 기관 및 담당자 정보 확인·수정
-
-![사용자 정보관리](./docs/images/user-settings.png)
-
-- **기관 정보** : 기관명(읽기 전용), 주소(편집), 대표번호(편집)
-- **담당자 정보** : 이름(읽기 전용), 이메일(편집), 부서(읽기 전용)
-- 인라인 편집 (hover 시 수정 버튼 표시, Enter/Esc 키보드 지원)
-- 저장 완료 토스트 알림
-
-#### 기술 지원
-
-> 사용 가이드 영상 및 기술 지원 연락처
-
-![사용자 기술 지원](./docs/images/user-support.png)
-
-- **사용 가이드** : YouTube 영상 임베드 (썸네일 클릭 시 재생)
-- **지원팀 연락처**
-  - 담당자 이름
-  - 전화번호 (클릭 시 통화 연결) + 영업시간 표시
-  - 이메일 (클릭 시 메일 작성)
+**배포** : TBD (Vercel) · **백엔드** : `https://api.staging.smarthearingloop.com`
 
 ---
 
@@ -211,10 +13,182 @@
 
 | 구분 | 기술 |
 |------|------|
-| Framework | React 19 |
-| Build | Vite 7 |
-| Language | TypeScript |
-| Styling | Tailwind CSS v4 |
-| Icons | Lucide React |
-| Deployment | Vercel |
-| Analytics | Vercel Analytics |
+| Framework / Build | React 19 · Vite 7 · TypeScript |
+| Styling | Tailwind CSS v4 (`@theme` 토큰) |
+| Icons | lucide-react |
+| Routing | react-router-dom v7 |
+| 클라이언트/인증 상태 | **zustand** (persist) |
+| 서버 상태 | **TanStack Query (React Query)** + axios |
+| 목(mock) | **MSW (Mock Service Worker)** |
+| 배포 / 계측 | Vercel · Vercel Analytics · Speed Insights |
+
+---
+
+## 아키텍처 — 실연동 + 목 하이브리드
+
+```
+컴포넌트 ──> TanStack Query 훅 ──> axios(apiClient) ──> ┌─ 실 staging API (NestJS)
+                                                         └─ MSW 핸들러 (백엔드 미구현 API만 가로챔)
+```
+
+- 서버 데이터는 **항상 TanStack Query 훅**을 통해 접근합니다(컴포넌트에서 axios 직접 호출 금지).
+- MSW는 **백엔드에 아직 없는 경로/필드만** 가로채고, 등록되지 않은 경로는 그대로 통과 → 실 staging 호출.
+- 따라서 백엔드가 배포되면 **해당 MSW 핸들러만 제거**하면 실연동으로 전환됩니다.
+- 인증·UI 상태는 zustand, 서버 데이터는 전부 TanStack Query로 분리.
+
+자세한 REAL/MOCK 매핑은 [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) · [`docs/BACKEND_REQUIREMENTS.md`](./docs/BACKEND_REQUIREMENTS.md) 참고.
+
+---
+
+## 역할 & 데모 계정
+
+| 역할 | 백엔드 role | 데이터 범위 | 메뉴 |
+|------|------------|-------------|------|
+| **관리자(admin)** | `ADMIN` | 전체 기관·기기 | 대시보드 · 히어링루프 관리 · 텔레코일존 관리 · 펌웨어 관리 · 알림센터 |
+| **사용자(user)** | `ZONE_USER` | 소속 기관 기기만 | 대시보드 · 히어링루프 관리 · 정보관리 · 기술 지원 |
+
+```
+관리자 데모 계정 :  admin / admin1234   (백엔드 시드 계정)
+```
+
+> 사용자 계정은 관리자가 **텔레코일존 관리**에서 존+계정을 생성해야 만들어집니다.
+
+**용어**: 텔레코일존 = 기관(동일 단위). 관리자 시점 "텔레코일존", 사용자 시점 "우리 기관". 기기 식별자는 **MAC 주소**(별칭 있으면 별칭이 메인 타이틀).
+
+---
+
+## 라우팅
+
+```
+/login                     로그인           (미인증)
+
+/admin                     대시보드
+/admin/hearing-loops       히어링루프 관리
+/admin/telecoil-zones      텔레코일존 관리
+/admin/firmware            펌웨어 관리
+/admin/alerts              알림센터
+
+/user                      대시보드
+/user/hearing-loops        히어링루프 관리
+/user/settings             정보관리
+/user/support              기술 지원
+```
+
+> 원본 대비 제외: `/signup`(회원가입), `/admin/activity-log`(활동 로그), 대시보드 지도뷰, 기기 제어(전원/볼륨) — 모든 텔레메트리는 **조회 전용**.
+
+---
+
+## 구현 현황 (페이지 단위)
+
+| 영역 | 상태 | 비고 |
+|------|------|------|
+| 로그인 / 인증 (JWT·역할분기) | ✅ 실연동 | `POST /auth/login`, `GET /users/me` |
+| 관리자 · 히어링루프 관리 | ✅ 실연동 | 목록·상세·등록·삭제·별칭·존배정 실연동 / 전원·네트워크·볼륨·펌웨어버전·상태는 목·파생 |
+| 관리자 · 텔레코일존 관리 | ✅ 실연동 | 존 CRUD·계정 생성/PW재설정·기기 배정 실연동 / 통합생성·주소·대표번호·담당자이메일은 목 |
+| 관리자 · 펌웨어 관리 | ✅ 실연동 | 업로드·목록·개별 전송 실연동 / 설명(description)·전체전송은 목 |
+| 관리자 · 알림센터 | 🚧 진행 예정 | 백엔드 알림 모듈 없음 → 전부 MSW 목 예정 |
+| 관리자 · 대시보드 | 🚧 보류 | 명세 확정 대기 |
+| 사용자 페이지 전체 | 🚧 미착수 | 관리자가 만든 실데이터 위에서 구현 예정 |
+
+### ✅ 실연동 (REAL) — 백엔드에 실제로 존재
+
+> 베이스 `VITE_API_BASE_URL` · 인증 `Authorization: Bearer {JWT}` (login 제외)
+
+| 기능 | 엔드포인트 |
+|------|-----------|
+| 로그인 / 내 프로필 | `POST /auth/login` · `GET /users/me` |
+| 사용자 계정 CRUD | `POST·GET·PATCH·DELETE /users` (아이디/이메일 수정, 중복 시 409) |
+| 텔레코일존 CRUD | `POST·GET·PATCH·DELETE /zones` (생성은 `{ name }`만) |
+| 텔레코일존 집계 | `GET /zones`가 `devices[] + user` 반환 → **기기 수·배정 기기·담당 계정 모두 실값** |
+| 기기 등록 / 목록 / 상세 / 삭제 | `POST /devices`·`/devices/bulk` · `GET /devices`·`/devices/:mac` · `DELETE /devices/:id` |
+| 기기 별칭(alias) | `PATCH /devices/:mac { alias }` (unique, 중복 시 409) — 관리자+소속 사용자 가능 |
+| 기기 존 배정 | `PUT /devices/:id/zone/:zoneId` (경로 파라미터, body 없음, ADMIN) |
+| 기기 상태 이력 | `GET /devices/:mac/status?page=&limit=` |
+| 기기 **실값 필드** | MAC · 별칭(`alias`) · 소속 존 · **온도(`last_temperature`)** · **동작(`last_gpio_state`)** · `last_seen_at` · 등록일 |
+| 펌웨어 | `POST /firmware`(업로드·409) · `GET /firmware`(목록) · `POST /firmware/:id/send/:mac`(개별 전송) |
+
+### 🟡 목 (MOCK) — 백엔드에 없어 MSW로 흉내
+
+| 항목 | 이유 / 처리 |
+|------|------------|
+| 기기 **전원(power)·네트워크(network)·볼륨(volume)** | StatusReport 미확장 → MSW가 기기 응답에 병합 |
+| 기기별 **펌웨어 버전** | 엔티티에 저장 안 됨 → 목 병합 |
+| 텔레코일존 **주소·대표번호** | Zone 엔티티에 필드 없음 |
+| 담당자 **이메일(managerEmail)** | `zone.user`에 email 없음 → 목 (또는 `GET /users/:id` 보강) |
+| 존+계정 **통합 생성** | 단일 엔드포인트 없음 → FE 오케스트레이션(`POST /zones` → `POST /users`) |
+| 기기 **배정 해제** | 해제 엔드포인트 없음(`:zoneId` 필수) → 세션 오버라이드 목 |
+| **정상 가동 수·가동률·존 상태** | MQTT heartbeat/`connection_status` 없음 → 목 기준 |
+| 펌웨어 **설명(description)·전체 전송(broadcast)** | 엔티티/엔드포인트 없음 |
+| **알림센터** 전체 | 백엔드 알림(Alert) 모듈 자체가 없음 |
+| 담당자 **부서(department)** | User 엔티티에 필드 없음 |
+
+### 🔵 파생 (DERIVED) — 실값으로 프론트가 계산
+
+| 항목 | 규칙 |
+|------|------|
+| 상태 뱃지 `normal/warning/offline` | `last_seen_at`(기본 5분 임계값) + 온도 임계값으로 파생 — 백엔드 `status`(PENDING/ACTIVE)와 무관 |
+| KPI / 가동률 집계 | `GET /devices`·`GET /zones` 결과를 프론트에서 집계 |
+
+> 화면에서 목 값 옆에는 **'목' 배지**를 달아 실값과 구분합니다. 실값(온도·동작·별칭)에는 배지가 없습니다.
+> 백엔드가 해당 API/필드를 배포하면 **MSW 핸들러와 '목' 배지만 제거**해 실연동으로 전환합니다.
+
+#### ⚠️ 실값이지만 신뢰 주의
+
+- **온도(`last_temperature`)** — 프로토콜상 현재 펌웨어가 **0.0 고정 전송** 가능성. 실 센서값 여부 확인 필요.
+- **연결 상태(online/offline)** — `StatusReport`가 이벤트 기반(주기 heartbeat 없음)이라 `last_seen_at`만으로는 부정확. 정확한 online은 백엔드 `connection_status`(MQTT LWT/keepalive) 제공 필요.
+- **error 상태** — `device_error_log` 엔티티는 있으나 조회 엔드포인트가 없어 `error` 상태는 파생하지 않음(현재 `normal/warning/offline`만).
+
+---
+
+## 로컬 실행
+
+> Vite/빌드는 **Node 20.19+ / 22.12+** 필요 (이 레포는 nvm `Node 24` 사용).
+
+```bash
+nvm use 24          # 또는 Node 22.12+
+npm install
+npm run dev         # http://localhost:5173 (포트 고정 — 백엔드 CORS 허용 기준)
+
+npm run build       # tsc -b && vite build
+npm run preview     # 빌드 산출물 미리보기
+```
+
+### 환경 변수
+
+`.env.example`를 참고해 `.env.development` / `.env.production`을 만듭니다. (`.env.*`는 git 제외 — Vercel에선 대시보드에서 설정)
+
+| 키 | 설명 | dev | prod |
+|----|------|-----|------|
+| `VITE_API_BASE_URL` | 백엔드 베이스 URL | `https://api.staging.smarthearingloop.com` | `https://api.smarthearingloop.com` |
+| `VITE_ENABLE_MOCK` | MSW 목 활성화 | `true` | `false` |
+
+> ⚠️ **CORS**: 백엔드가 프론트 origin을 허용해야 호출됩니다. 새 배포 도메인(예: `*.vercel.app`)은 staging CORS 허용이 필요하며, 안 되면 **로그인부터 막힙니다**.
+
+---
+
+## 폴더 구조
+
+```
+src/
+├── api/            # axios 인스턴스 + 엔드포인트 함수
+├── hooks/          # TanStack Query 훅 (useDevices, useZones, useFirmware ...)
+├── mocks/          # MSW 핸들러 (백엔드 미구현 API만)
+├── components/layout/  # 레이아웃 · 라우트 가드 (원본 유지)
+├── components/         # 공통 컴포넌트
+├── pages/admin|user|auth/  # 페이지 (데이터 소스만 교체)
+├── stores/         # zustand (authStore)
+├── types/          # 뷰모델 + API 응답 타입
+├── lib/            # cn(), 포매터, 매퍼, queryClient
+└── index.css       # @theme 디자인 토큰
+```
+
+---
+
+## 문서
+
+| 문서 | 내용 |
+|------|------|
+| [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) | 기능 요구사항 (단일 원천) |
+| [`docs/BACKEND_REQUIREMENTS.md`](./docs/BACKEND_REQUIREMENTS.md) | 백엔드 확장 요청 항목 |
+| [`docs/README.original.md`](./docs/README.original.md) | 원본 프로토타입 명세 (참고용, 화면 스크린샷 포함) |
+| [`CLAUDE.md`](./CLAUDE.md) | 구현 원칙·연동 상태·단계별 진행 가이드 |
