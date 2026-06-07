@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
 import {
   Search,
   Plus,
   X,
   Cpu,
-  HardDrive,
+  Wifi,
   UploadCloud,
   Send,
   Radio,
   Loader2,
   AlertCircle,
   CheckCircle2,
-  FileText,
-  Tag,
 } from 'lucide-react'
 import type { Firmware as FirmwareVM } from '@/types/firmware'
 import { formatDateTime } from '@/lib/format'
@@ -33,36 +30,71 @@ function useLockBodyScroll() {
   }, [])
 }
 
-/** 목 값 배지 */
-function MockBadge() {
-  return (
-    <span className="ml-1 inline-block rounded bg-warning/10 px-1.5 py-0.5 text-[9px] font-bold text-warning align-middle">목</span>
-  )
+/** S3 key → 파일명만 추출 (없으면 빈 문자열) */
+function fileName(key: string): string {
+  if (!key) return ''
+  return key.split('/').pop() || key
 }
 
 /* ══════════════════════════════════════════════════════
-   Upload Modal — 펌웨어 추가 (파일 + 버전 + 간단 설명[목])
+   Upload Modal — 펌웨어 추가 (HL + WiFi 2파일 세트)
+   버전은 서버가 자동 부여. 설명/타입 입력 없음.
    ══════════════════════════════════════════════════════ */
+
+/** 단일 파일 선택 필드 */
+function FilePicker({
+  label,
+  hint,
+  icon: Icon,
+  file,
+  disabled,
+  onPick,
+}: {
+  label: string
+  hint: string
+  icon: typeof Cpu
+  file: File | null
+  disabled: boolean
+  onPick: (f: File | null) => void
+}) {
+  return (
+    <div>
+      <label className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        {label}
+        <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">필수</span>
+      </label>
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-4 py-3 text-[13px] text-primary hover:bg-primary/10 transition-colors">
+        <UploadCloud className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate font-semibold">{file ? file.name : hint}</span>
+        <input
+          type="file"
+          accept=".bin,application/octet-stream"
+          disabled={disabled}
+          onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+          className="hidden"
+        />
+      </label>
+    </div>
+  )
+}
 
 function UploadModal({ onClose }: { onClose: () => void }) {
   useLockBodyScroll()
   const upload = useUploadFirmware()
-  const [version, setVersion] = useState('')
-  const [description, setDescription] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [hlFile, setHlFile] = useState<File | null>(null)
+  const [wifiFile, setWifiFile] = useState<File | null>(null)
   const [error, setError] = useState('')
 
   const submit = () => {
     setError('')
-    const v = version.trim()
-    if (!v) { setError('펌웨어 버전을 입력해주세요.'); return }
-    if (!file) { setError('펌웨어 파일을 선택해주세요.'); return }
+    if (!hlFile) { setError('HL 펌웨어 파일을 선택해주세요.'); return }
+    if (!wifiFile) { setError('WiFi 펌웨어 파일을 선택해주세요.'); return }
     upload.mutate(
-      { version: v, file, description: description.trim() || undefined },
+      { hlFile, wifiFile },
       {
         onSuccess: onClose,
-        onError: (e) =>
-          setError(axios.isAxiosError(e) && e.response?.status === 409 ? '이미 존재하는 버전입니다.' : '펌웨어 업로드에 실패했습니다.'),
+        onError: () => setError('펌웨어 업로드에 실패했습니다.'),
       },
     )
   }
@@ -77,7 +109,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-foreground">펌웨어 추가</h3>
-              <p className="text-[12px] text-muted-foreground">펌웨어 파일을 업로드합니다.</p>
+              <p className="text-[12px] text-muted-foreground">HL · WiFi 펌웨어를 한 세트로 업로드합니다. 버전은 자동 부여됩니다.</p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors">
@@ -86,55 +118,8 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto scrollbar-thin p-6">
-          <div>
-            <label className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-              펌웨어 버전
-              <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">필수</span>
-            </label>
-            <input
-              type="text"
-              placeholder="예: 2.5.0"
-              value={version}
-              disabled={upload.isPending}
-              onChange={(e) => setVersion(e.target.value)}
-              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-              <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
-              펌웨어 파일
-              <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">필수</span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-4 py-3 text-[13px] text-primary hover:bg-primary/10 transition-colors">
-              <UploadCloud className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate font-semibold">{file ? file.name : '파일 선택 (.bin)'}</span>
-              <input
-                type="file"
-                accept=".bin,application/octet-stream"
-                disabled={upload.isPending}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          <div>
-            <label className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-              간단 설명<MockBadge />
-            </label>
-            <textarea
-              placeholder="예: 온도 센서 안정화 및 연결 끊김 개선"
-              value={description}
-              disabled={upload.isPending}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full resize-none rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            />
-          </div>
+          <FilePicker label="HL 펌웨어" hint="HearingLoop MCU 펌웨어 선택 (.bin)" icon={Cpu} file={hlFile} disabled={upload.isPending} onPick={setHlFile} />
+          <FilePicker label="WiFi 펌웨어" hint="WiFi 모듈 펌웨어 선택 (.bin)" icon={Wifi} file={wifiFile} disabled={upload.isPending} onPick={setWifiFile} />
 
           {error && (
             <p className="flex items-center gap-1.5 text-[12px] font-semibold text-destructive">
@@ -199,7 +184,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
     )
   }
 
-  // 선택된 기기에 순차 전송 (개별 POST /firmware/:id/send/:mac 반복)
+  // 선택된 기기에 순차 전송 (개별 POST /firmware/:id/send/:mac 반복 — self+target 동시 발송)
   const send = async () => {
     setSending(true)
     const next: Record<string, SendResult> = {}
@@ -230,7 +215,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
             <div>
               <h3 className="text-lg font-bold text-foreground">펌웨어 업데이트 전송</h3>
               <p className="text-[12px] text-muted-foreground">
-                <span className="font-mono font-semibold text-primary">v{firmware.version}</span> 을(를) 보낼 기기를 선택하세요.
+                <span className="font-mono font-semibold text-primary">v{firmware.version}</span> 을(를) 보낼 기기를 선택하세요. (HL·WiFi 동시 발송)
               </p>
             </div>
           </div>
@@ -289,7 +274,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                         {d.alias?.trim() ? d.mac : (d.telecoilZoneName ?? '미배정')}
                       </p>
                     </div>
-                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{d.firmwareVersion || '—'}<MockBadge /></span>
+                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{d.firmwareVersion || '—'}</span>
                     {result === 'ok' && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
                     {result === 'fail' && <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />}
                   </button>
@@ -342,7 +327,10 @@ export default function FirmwarePage() {
     if (!search.trim()) return all
     const q = search.toLowerCase()
     return all.filter(
-      (f) => f.version.toLowerCase().includes(q) || f.description.toLowerCase().includes(q),
+      (f) =>
+        f.version.toLowerCase().includes(q) ||
+        f.hlS3Key.toLowerCase().includes(q) ||
+        f.wifiS3Key.toLowerCase().includes(q),
     )
   }, [all, search])
 
@@ -358,7 +346,7 @@ export default function FirmwarePage() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="버전, 설명 검색..."
+            placeholder="버전, 파일명 검색..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-4 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
@@ -392,8 +380,8 @@ export default function FirmwarePage() {
             <thead>
               <tr className="border-b border-border">
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">버전</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">설명</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">타입</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">HL 펌웨어</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi 펌웨어</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">업로드 일시</th>
                 <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전송</th>
               </tr>
@@ -408,10 +396,14 @@ export default function FirmwarePage() {
                     </div>
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className="text-[13px] text-foreground">{f.description || <span className="text-muted-foreground">—</span>}</span>
+                    <span className="flex items-center gap-1.5 font-mono text-[12px] text-foreground" title={f.hlS3Key}>
+                      <Cpu className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.hlS3Key) || <span className="text-muted-foreground">—</span>}
+                    </span>
                   </td>
-                  <td className="px-5 py-3.5 text-center">
-                    <span className="inline-block rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">{f.firmwareType}</span>
+                  <td className="px-5 py-3.5">
+                    <span className="flex items-center gap-1.5 font-mono text-[12px] text-foreground" title={f.wifiS3Key}>
+                      <Wifi className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.wifiS3Key) || <span className="text-muted-foreground">—</span>}
+                    </span>
                   </td>
                   <td className="px-5 py-3.5">
                     <span className="text-[13px] text-muted-foreground">{formatDateTime(f.uploadedAt)}</span>

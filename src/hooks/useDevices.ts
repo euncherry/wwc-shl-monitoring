@@ -7,6 +7,8 @@ export const deviceKeys = {
   all: ['devices'] as const,
   list: () => [...deviceKeys.all, 'list'] as const,
   detail: (mac: string) => [...deviceKeys.all, 'detail', mac] as const,
+  statusLogs: (mac: string, page: number, limit: number) =>
+    [...deviceKeys.all, 'statusLogs', mac, page, limit] as const,
 }
 
 /** 기기 목록 — HearingLoop 뷰모델로 매핑해서 반환 */
@@ -25,6 +27,15 @@ export function useDevice(mac: string | undefined) {
     queryFn: () => devicesApi.get(mac as string),
     enabled: Boolean(mac),
     select: toHearingLoop,
+  })
+}
+
+/** 기기 상태 이력 (GET /devices/:mac/status) — 동작/온도 시계열 */
+export function useDeviceStatusLogs(mac: string | undefined, page = 1, limit = 20, enabled = true) {
+  return useQuery({
+    queryKey: deviceKeys.statusLogs(mac ?? '', page, limit),
+    queryFn: () => devicesApi.getStatusLogs(mac as string, page, limit),
+    enabled: enabled && Boolean(mac),
   })
 }
 

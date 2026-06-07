@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { firmwareApi, type UploadFirmwareInput } from '@/api/firmware'
-import type { Firmware, FirmwareApiResponse } from '@/types/firmware'
+import type { Firmware, FirmwareResponseDto } from '@/types/firmware'
 
 /** 펌웨어 쿼리 키 */
 export const firmwareKeys = {
@@ -8,14 +8,13 @@ export const firmwareKeys = {
   list: () => [...firmwareKeys.all, 'list'] as const,
 }
 
-/** FirmwareApiResponse(실응답 + 목 description) → 뷰모델 */
-function toFirmware(dto: FirmwareApiResponse): Firmware {
+/** FirmwareResponseDto → 뷰모델 (구 응답엔 hl/wifi 키가 없을 수 있어 방어적으로 기본값) */
+function toFirmware(dto: FirmwareResponseDto): Firmware {
   return {
     id: dto.id,
     version: dto.version,
-    s3Url: dto.s3_url,
-    firmwareType: dto.firmware_type,
-    description: dto.description ?? '',
+    hlS3Key: dto.hl_s3_key ?? '',
+    wifiS3Key: dto.wifi_s3_key ?? '',
     uploadedAt: dto.uploaded_at,
   }
 }
@@ -32,7 +31,7 @@ export function useFirmwares() {
   })
 }
 
-/** 펌웨어 업로드 (multipart) — 409 중복은 호출부에서 처리 */
+/** 펌웨어 업로드 (multipart, HL+WiFi 2파일) — 400/500은 호출부에서 처리 */
 export function useUploadFirmware() {
   const qc = useQueryClient()
   return useMutation({

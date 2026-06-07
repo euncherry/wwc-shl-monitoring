@@ -1,39 +1,37 @@
 import { apiClient } from './client'
-import type { FirmwareApiResponse } from '@/types/firmware'
+import type { FirmwareResponseDto } from '@/types/firmware'
 
-/** POST /firmware 입력 */
+/** POST /firmware 입력 — HL + WiFi 펌웨어 2파일 세트 */
 export interface UploadFirmwareInput {
-  version: string
-  file: File
-  /** 간단 설명(목 — 엔티티에 없음, MSW가 보관) */
-  description?: string
+  /** HearingLoop MCU 펌웨어 바이너리 */
+  hlFile: File
+  /** WiFi 모듈 펌웨어 바이너리 */
+  wifiFile: File
 }
 
 /**
- * 펌웨어 도메인 엔드포인트.
- * - list/upload/sendUpdate = REAL (`/firmware`, `/firmware/:id/send/:mac`)
- * - description = MSW 목 병합(§10·§13). version은 unique(409).
+ * 펌웨어 도메인 엔드포인트 (전부 REAL).
+ * 2026-06-06 개편: 2파일 세트 업로드, 버전 서버 자동증가(409 없음), 설명/firmware_type 제거.
  */
 export const firmwareApi = {
-  /** GET /firmware — MSW가 응답에 description(목) 병합 */
+  /** GET /firmware — 최신 업로드순(서버) */
   list: async () => {
-    const { data } = await apiClient.get<FirmwareApiResponse[]>('/firmware')
+    const { data } = await apiClient.get<FirmwareResponseDto[]>('/firmware')
     return data
   },
 
-  /** POST /firmware (multipart) — 409 = 버전 중복. description은 목이라 백엔드는 무시, MSW가 보관 */
+  /** POST /firmware (multipart) — hl_file + wifi_file 둘 다 필수. 400=파일 누락, 500=S3 실패 */
   upload: async (input: UploadFirmwareInput) => {
     const form = new FormData()
-    form.append('version', input.version)
-    form.append('file', input.file)
-    if (input.description) form.append('description', input.description)
-    const { data } = await apiClient.post<FirmwareApiResponse>('/firmware', form, {
+    form.append('hl_file', input.hlFile)
+    form.append('wifi_file', input.wifiFile)
+    const { data } = await apiClient.post<FirmwareResponseDto>('/firmware', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return data
   },
 
-  /** POST /firmware/:id/send/:mac — 개별 기기 업데이트 알림. 404 = 펌웨어/기기 없음 */
+  /** POST /firmware/:id/send/:mac — self(HL)+target(WiFi) 알림 동시 발송. 404=펌웨어 없음 */
   sendUpdate: async (id: number, mac: string) => {
     const { data } = await apiClient.post<{ message: string }>(`/firmware/${id}/send/${mac}`)
     return data

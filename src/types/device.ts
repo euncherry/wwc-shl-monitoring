@@ -54,6 +54,10 @@ export interface DeviceResponseDto {
   /** 온도 °C (REAL) */
   last_temperature: number | null
   last_seen_at: string | null
+  /** ESP32 펌웨어 버전 (REAL — HelloRequest 수신 시 갱신) */
+  firmware_version: string | null
+  /** 기기 연결 여부 (REAL — 최근 5분 이내 통신 시 true) */
+  is_connected: boolean
   zone: ZoneSummary | null
   created_at: string
 }
@@ -61,12 +65,12 @@ export interface DeviceResponseDto {
 /**
  * MSW가 응답에 병합하는 목 필드(StatusReport 확장 대기 — §1).
  * 실값이 내려오기 시작하면 MSW 핸들러와 함께 제거(§13).
+ * (firmware_version·is_connected는 백엔드 실값으로 전환됨 → 목에서 제외)
  */
 export interface MockDeviceFields {
   power?: boolean
   network_connected?: boolean
   volume?: number
-  firmware_version?: string
   alerts?: AlertHistory[]
 }
 
@@ -77,6 +81,26 @@ export type DeviceApiResponse = DeviceResponseDto & MockDeviceFields
 export interface BulkCreateResult {
   created: DeviceResponseDto[]
   skipped: string[]
+}
+
+/* ── 기기 상태 이력 (GET /devices/:mac/status) — StatusReport 시계열, REAL ── */
+export interface DeviceStatusLogDto {
+  id: number
+  mac_address: string
+  /** GPIO 상태(동작 ON/OFF) */
+  gpio_state: boolean | null
+  /** 온도 °C */
+  temperature: number | null
+  /** 기기 보고 시각 */
+  reported_at: string
+  created_at: string
+}
+
+export interface StatusLogPageDto {
+  data: DeviceStatusLogDto[]
+  total: number
+  page: number
+  limit: number
 }
 
 export type AlertLevel = 'critical' | 'warning' | 'info'
@@ -160,5 +184,8 @@ export interface ZoneMockFields {
 /** 실 zone 응답 + MSW 목 병합 */
 export type ZoneApiResponse = ZoneResponseDto & ZoneMockFields
 
-/** zone 상세의 기기 카드용 — DeviceInZoneDto + 목 텔레메트리(전원/네트워크/펌웨어, 온도는 실값) */
-export type ZoneDeviceApiResponse = DeviceInZoneDto & MockDeviceFields
+/**
+ * zone 상세의 기기 카드용 — DeviceInZoneDto + 목 텔레메트리(전원/네트워크/볼륨/펌웨어, 온도는 실값).
+ * ⚠️ DeviceInZoneDto엔 firmware_version/is_connected가 없어 zone 상세 한정 목 유지(§2). 메인 /devices는 실값.
+ */
+export type ZoneDeviceApiResponse = DeviceInZoneDto & MockDeviceFields & { firmware_version?: string | null }

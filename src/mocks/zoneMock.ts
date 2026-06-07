@@ -14,6 +14,17 @@ function mockManagerEmail(user: UserSummary | null): string | null {
   return `${user.username}@example.com`
 }
 
+/**
+ * zone 상세 한정 목 펌웨어 버전. DeviceInZoneDto엔 firmware_version이 없어 여기서만 목으로 채운다(§2).
+ * 메인 GET /devices는 실 firmware_version을 내려주므로 목 대상 아님.
+ */
+const ZONE_FW_VERSIONS = ['v2.5.0', 'v2.4.1', 'v2.3.0']
+function mockZoneFirmware(mac: string): string {
+  let h = 0
+  for (let i = 0; i < mac.length; i++) h = (h * 31 + mac.charCodeAt(i)) >>> 0
+  return ZONE_FW_VERSIONS[h % ZONE_FW_VERSIONS.length]
+}
+
 /** 정상 가동(목) = mock 전원이 ON인 기기 수 (기기 카드 전원과 동일 기준) */
 function mockActiveCount(devices: DeviceInZoneDto[]): number {
   return devices.filter((d) => mockFieldsFor(d).power).length
@@ -30,6 +41,6 @@ export function mergeZoneDetailMock(zone: ZoneResponseDto): ZoneApiResponse {
     ...zone,
     managerEmail: mockManagerEmail(zone.user),
     activeDeviceCount: mockActiveCount(zone.devices),
-    devices: zone.devices.map((d) => ({ ...d, ...mockFieldsFor(d) })),
+    devices: zone.devices.map((d) => ({ ...d, ...mockFieldsFor(d), firmware_version: mockZoneFirmware(d.mac_address) })),
   }
 }

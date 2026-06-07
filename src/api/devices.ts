@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { DeviceApiResponse, BulkCreateResult } from '@/types/device'
+import type { DeviceApiResponse, BulkCreateResult, StatusLogPageDto } from '@/types/device'
 
 /** POST /devices, /devices/bulk 입력 (CreateDeviceDto) */
 export interface CreateDeviceInput {
@@ -19,6 +19,14 @@ export const devicesApi = {
   /** GET /devices/:mac */
   get: async (mac: string) => {
     const { data } = await apiClient.get<DeviceApiResponse>(`/devices/${mac}`)
+    return data
+  },
+
+  /** GET /devices/:mac/status — 상태(동작/온도) 보고 이력(페이지네이션) */
+  getStatusLogs: async (mac: string, page = 1, limit = 20) => {
+    const { data } = await apiClient.get<StatusLogPageDto>(`/devices/${mac}/status`, {
+      params: { page, limit },
+    })
     return data
   },
 

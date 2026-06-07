@@ -31,7 +31,7 @@ import {
   Check,
   ChevronDown,
 } from 'lucide-react'
-import type { HearingLoop } from '@/types/device'
+import type { HearingLoop, DeviceStatusLogDto } from '@/types/device'
 import { formatDateTime } from '@/lib/format'
 import {
   useDevices,
@@ -39,7 +39,10 @@ import {
   useDeleteDevice,
   useCreateDevicesBulk,
   useAssignZone,
+  useDeviceStatusLogs,
 } from '@/hooks/useDevices'
+import { useAlerts } from '@/hooks/useAlerts'
+import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 import { useZones } from '@/hooks/useZones'
 import type { CreateDeviceInput } from '@/api/devices'
 
@@ -54,6 +57,108 @@ function useLockBodyScroll() {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }
   }, [])
+}
+
+/* ── 기기 이력 (알림 REAL / 상태 REAL / 전체 합본) ── */
+
+type HistoryTab = 'alerts' | 'status' | 'all'
+
+function priorityStyle(p: AlertPriorityEnum) {
+  if (p === 'CRITICAL') return { dot: 'bg-destructive', box: 'border-destructive/20 bg-destructive/5' }
+  if (p === 'WARNING') return { dot: 'bg-warning', box: 'border-warning/20 bg-warning/5' }
+  return { dot: 'bg-primary', box: 'border-primary/20 bg-primary/5' }
+}
+
+function AlertRow({ a }: { a: AlertResponseDto }) {
+  const s = priorityStyle(a.priority)
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-[12px] ${s.box}`}>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
+      <span className="shrink-0 font-semibold text-foreground">{ALERT_TYPE_LABEL[a.type]}</span>
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">{a.message}</span>
+      <span className="shrink-0 text-muted-foreground">{formatDateTime(a.occurred_at)}</span>
+    </div>
+  )
+}
+
+function StatusRow({ s }: { s: DeviceStatusLogDto }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-page/30 px-4 py-3 text-[12px]">
+      <Activity className={`h-3.5 w-3.5 shrink-0 ${s.gpio_state ? 'text-success' : 'text-muted-foreground'}`} />
+      <span className="shrink-0 font-semibold text-foreground">{s.gpio_state ? '작동' : '중지'}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-1 text-muted-foreground">
+        <Thermometer className="h-3 w-3 shrink-0" />{s.temperature != null ? `${s.temperature}°C` : '—'}
+      </span>
+      <span className="shrink-0 text-muted-foreground">{formatDateTime(s.reported_at)}</span>
+    </div>
+  )
+}
+
+function HistoryEmpty({ text }: { text: string }) {
+  return <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{text}</p>
+}
+
+function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
+  const [tab, setTab] = useState<HistoryTab>('alerts')
+  const alertsQ = useAlerts({ device_id: deviceId, limit: 20 })
+  const statusQ = useDeviceStatusLogs(mac, 1, 20)
+
+  const alerts = alertsQ.data?.items ?? []
+  const logs = statusQ.data?.data ?? []
+
+  const merged = useMemo(() => {
+    const items = [
+      ...alerts.map((a) => ({ kind: 'alert' as const, ts: a.occurred_at, a })),
+      ...logs.map((s) => ({ kind: 'status' as const, ts: s.reported_at, s })),
+    ]
+    return items.sort((x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime())
+  }, [alerts, logs])
+
+  const tabs: { key: HistoryTab; label: string; count: number }[] = [
+    { key: 'alerts', label: '알림 이력', count: alerts.length },
+    { key: 'status', label: '상태 이력', count: logs.length },
+    { key: 'all', label: '전체보기', count: merged.length },
+  ]
+
+  const isLoading = tab === 'status' ? statusQ.isLoading : tab === 'alerts' ? alertsQ.isLoading : alertsQ.isLoading || statusQ.isLoading
+  const isError = tab === 'status' ? statusQ.isError : tab === 'alerts' ? alertsQ.isError : alertsQ.isError || statusQ.isError
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all ${
+              tab === t.key ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:bg-page'
+            }`}
+          >
+            {t.label}
+            <span className={`text-[10px] font-bold ${tab === t.key ? 'opacity-80' : 'text-muted-foreground/60'}`}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /><span className="text-[12px]">불러오는 중…</span>
+        </div>
+      ) : isError ? (
+        <HistoryEmpty text="이력을 불러오지 못했습니다." />
+      ) : tab === 'alerts' ? (
+        alerts.length ? <div className="space-y-2">{alerts.map((a) => <AlertRow key={a.id} a={a} />)}</div> : <HistoryEmpty text="알림 이력이 없습니다." />
+      ) : tab === 'status' ? (
+        logs.length ? <div className="space-y-2">{logs.map((s) => <StatusRow key={s.id} s={s} />)}</div> : <HistoryEmpty text="상태 이력이 없습니다." />
+      ) : merged.length ? (
+        <div className="space-y-2">
+          {merged.map((m) => (m.kind === 'alert' ? <AlertRow key={`a${m.a.id}`} a={m.a} /> : <StatusRow key={`s${m.s.id}`} s={m.s} />))}
+        </div>
+      ) : (
+        <HistoryEmpty text="이력이 없습니다." />
+      )}
+    </div>
+  )
 }
 
 /** 목 값 표시용 배지 — StatusReport 확장 배포 시 핸들러와 함께 제거(§13) */
@@ -303,7 +408,7 @@ function DeviceDetailModal({
           <div className="grid grid-cols-2 gap-4">
             {/* 전원 — 목 */}
             <div className="rounded-xl border border-border p-4">
-              <span className="text-[12px] text-muted-foreground block mb-2">전원 상태<MockBadge /></span>
+              <span className="text-[12px] text-muted-foreground block mb-2">전원 상태</span>
               <div className="flex items-center gap-2">
                 <PowerIcon on={device.power} />
                 <span className="text-sm font-bold text-foreground">{device.power ? 'ON' : 'OFF'}</span>
@@ -321,7 +426,7 @@ function DeviceDetailModal({
 
             {/* 네트워크 — 목 */}
             <div className="rounded-xl border border-border p-4">
-              <span className="text-[12px] text-muted-foreground block mb-2">네트워크 연결<MockBadge /></span>
+              <span className="text-[12px] text-muted-foreground block mb-2">네트워크 연결</span>
               <div className="flex items-center gap-2">
                 <NetworkIcon connected={device.networkConnected} />
                 <span className="text-sm font-bold text-foreground">{device.networkConnected ? '연결됨' : '연결 끊김'}</span>
@@ -357,7 +462,7 @@ function DeviceDetailModal({
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2.5">
                 <Shield className="h-4 w-4 text-muted-foreground" />
-                <span className="text-[13px] text-muted-foreground">펌웨어 버전<MockBadge /></span>
+                <span className="text-[13px] text-muted-foreground">펌웨어 버전</span>
               </div>
               <span className="text-[13px] font-semibold text-foreground">{device.firmwareVersion || '—'}</span>
             </div>
@@ -379,35 +484,13 @@ function DeviceDetailModal({
             ))}
           </div>
 
-          {/* Alerts history — 목 */}
+          {/* 기기 이력 — 알림(REAL) / 상태(REAL) / 전체 합본 */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Bell className="h-4 w-4 text-destructive" />
-              <h4 className="text-[14px] font-bold text-foreground">알림 이력</h4>
-              <MockBadge />
+              <h4 className="text-[14px] font-bold text-foreground">기기 이력</h4>
             </div>
-            {device.alerts.length > 0 ? (
-              <div className="space-y-2">
-                {device.alerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`flex items-center gap-3 rounded-xl px-4 py-3 text-[12px] ${
-                      alert.level === 'critical' ? 'bg-destructive/5 border border-destructive/20' :
-                      alert.level === 'warning' ? 'bg-warning/5 border border-warning/20' : 'bg-primary/5 border border-primary/20'
-                    }`}
-                  >
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${
-                      alert.level === 'critical' ? 'bg-destructive' : alert.level === 'warning' ? 'bg-warning' : 'bg-primary'
-                    }`} />
-                    <span className="font-semibold text-foreground">{alert.type}</span>
-                    <span className="text-muted-foreground flex-1">{alert.message}</span>
-                    <span className="text-muted-foreground shrink-0">{formatDateTime(alert.createdAt)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[12px] text-muted-foreground px-1">최근 알림이 없습니다.</p>
-            )}
+            <DeviceHistory deviceId={Number(device.id)} mac={device.mac} />
           </div>
         </div>
 
@@ -860,11 +943,11 @@ export default function HearingLoopsPage() {
               <tr className="bg-page/50 border-b border-border">
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">기기</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">텔레코일존</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원<MockBadge /></th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">네트워크<MockBadge /></th>
+                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원</th>
+                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">네트워크</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">온도</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">볼륨<MockBadge /></th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어<MockBadge /></th>
+                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">최근 업데이트</th>
                 <th className="px-5 py-3 w-12"></th>
               </tr>

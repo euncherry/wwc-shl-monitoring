@@ -6,8 +6,6 @@ import type { AlertHistory, DeviceApiResponse, DeviceResponseDto } from '@/types
  * 실값이 내려오기 시작하면 이 파일과 핸들러를 함께 제거(§13).
  */
 
-const FW_VERSIONS = ['v2.5.0', 'v2.4.1', 'v2.3.0']
-
 const ALERT_TEMPLATES: Pick<AlertHistory, 'type' | 'level' | 'message'>[] = [
   { type: '온도 이상', level: 'warning', message: '온도가 정상 범위를 초과했습니다.' },
   { type: '연결 끊김', level: 'critical', message: '기기와의 연결이 끊어졌습니다.' },
@@ -23,7 +21,7 @@ function hashMac(mac: string): number {
   return h
 }
 
-/** 기기 하나에 대한 목 필드 (power/network/volume/firmware/alerts).
+/** 기기 하나에 대한 목 필드 (power/network/volume/alerts). firmware_version·is_connected는 실값이라 제외.
  *  DeviceResponseDto·DeviceInZoneDto 모두 받도록 필요한 필드만 좁게 받는다. */
 export function mockFieldsFor(dto: { mac_address: string; last_seen_at: string | null; created_at: string }) {
   const h = hashMac(dto.mac_address)
@@ -44,7 +42,6 @@ export function mockFieldsFor(dto: { mac_address: string; last_seen_at: string |
     power: h % 10 !== 0, // 약 90% ON
     network_connected: h % 7 !== 0,
     volume: 50 + (h % 51), // 50~100
-    firmware_version: FW_VERSIONS[h % FW_VERSIONS.length],
     alerts,
   }
 }
