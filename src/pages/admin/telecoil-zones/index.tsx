@@ -37,6 +37,8 @@ import {
 } from '@/hooks/useZones'
 import { useCreateUser, useUpdateUser, useDeleteUser } from '@/hooks/useUsers'
 import { useDevices, useAssignZone, useUnassignZone } from '@/hooks/useDevices'
+import { useAlerts } from '@/hooks/useAlerts'
+import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 
 /* ══════════════════════════════════════════════════════
    유틸 / Sub-components
@@ -79,6 +81,42 @@ function PowerIcon({ on }: { on: boolean }) {
 }
 function NetworkIcon({ connected }: { connected: boolean }) {
   return connected ? <Wifi className="h-3.5 w-3.5 text-success" /> : <WifiOff className="h-3.5 w-3.5 text-destructive" />
+}
+
+/* ── 존 알림 이력 (GET /alerts?zone_id=) — 존 소속 기기 알림(REAL) ── */
+const ALERT_PRI: Record<AlertPriorityEnum, { dot: string; box: string }> = {
+  CRITICAL: { dot: 'bg-destructive', box: 'border-destructive/20 bg-destructive/5' },
+  WARNING: { dot: 'bg-warning', box: 'border-warning/20 bg-warning/5' },
+  INFO: { dot: 'bg-primary', box: 'border-primary/20 bg-primary/5' },
+}
+
+function ZoneAlertRow({ a }: { a: AlertResponseDto }) {
+  const p = ALERT_PRI[a.priority]
+  return (
+    <div className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12px] ${p.box}`}>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${p.dot}`} />
+      <span className="shrink-0 font-semibold text-foreground">{ALERT_TYPE_LABEL[a.type]}</span>
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">{a.message}</span>
+      <span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground">{a.device?.alias?.trim() ? a.device.alias : a.device?.mac_address}</span>
+      <span className="shrink-0 text-muted-foreground">{formatDateTime(a.occurred_at)}</span>
+    </div>
+  )
+}
+
+function ZoneAlertHistory({ zoneId }: { zoneId: number }) {
+  const { data, isLoading, isError } = useAlerts({ zone_id: zoneId, limit: 50 })
+  const alerts = data?.items ?? []
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /><span className="text-[12px]">불러오는 중…</span></div>
+  }
+  if (isError) {
+    return <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8"><Bell className="h-7 w-7 text-muted-foreground/30" /><p className="text-[13px] text-muted-foreground">알림 이력을 불러오지 못했습니다.</p></div>
+  }
+  if (alerts.length === 0) {
+    return <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8"><Bell className="h-7 w-7 text-muted-foreground/30" /><p className="text-[13px] text-muted-foreground">알림 이력이 없습니다.</p></div>
+  }
+  return <div className="space-y-2">{alerts.map((a) => <ZoneAlertRow key={a.id} a={a} />)}</div>
 }
 
 /* ══════════════════════════════════════════════════════
@@ -580,10 +618,10 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
               {/* 구분선 */}
               <div className="border-t border-border/50" />
 
-              {/* 알림 이력 (목) */}
+              {/* 알림 이력 (REAL — 존 소속 기기 알림) */}
               <div>
-                <div className="mb-3 flex items-center gap-2"><Bell className="h-4 w-4 text-warning" /><h4 className="flex items-center text-[14px] font-bold text-foreground">알림 이력<MockBadge /></h4></div>
-                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8"><Bell className="h-7 w-7 text-muted-foreground/30" /><p className="text-[13px] text-muted-foreground">알림 이력이 없습니다.</p></div>
+                <div className="mb-3 flex items-center gap-2"><Bell className="h-4 w-4 text-warning" /><h4 className="text-[14px] font-bold text-foreground">알림 이력</h4></div>
+                <ZoneAlertHistory zoneId={zoneId} />
               </div>
             </div>
 
