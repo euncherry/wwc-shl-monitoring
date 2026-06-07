@@ -9,6 +9,7 @@ import {
   Send,
   Radio,
   Building2,
+  FileText,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -86,6 +87,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
   const upload = useUploadFirmware()
   const [hlFile, setHlFile] = useState<File | null>(null)
   const [wifiFile, setWifiFile] = useState<File | null>(null)
+  const [description, setDescription] = useState('')
   const [error, setError] = useState('')
 
   const submit = () => {
@@ -93,7 +95,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
     if (!hlFile) { setError('HL 펌웨어 파일을 선택해주세요.'); return }
     if (!wifiFile) { setError('WiFi 펌웨어 파일을 선택해주세요.'); return }
     upload.mutate(
-      { hlFile, wifiFile },
+      { hlFile, wifiFile, description: description.trim() || undefined },
       {
         onSuccess: onClose,
         onError: () => setError('펌웨어 업로드에 실패했습니다.'),
@@ -122,6 +124,23 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         <div className="flex-1 space-y-5 overflow-y-auto scrollbar-thin p-6">
           <FilePicker label="HL 펌웨어" hint="HearingLoop MCU 펌웨어 선택 (.bin)" icon={Cpu} file={hlFile} disabled={upload.isPending} onPick={setHlFile} />
           <FilePicker label="WiFi 펌웨어" hint="WiFi 모듈 펌웨어 선택 (.bin)" icon={Wifi} file={wifiFile} disabled={upload.isPending} onPick={setWifiFile} />
+
+          <div>
+            <label className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              간단 설명
+              <span className="text-[11px] font-normal text-muted-foreground">(선택)</span>
+            </label>
+            <textarea
+              placeholder="예: 버그 수정 및 연결 안정성 개선"
+              value={description}
+              maxLength={255}
+              disabled={upload.isPending}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="w-full resize-none rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
 
           {error && (
             <p className="flex items-center gap-1.5 text-[12px] font-semibold text-destructive">
@@ -386,6 +405,7 @@ export default function FirmwarePage() {
     return all.filter(
       (f) =>
         f.version.toLowerCase().includes(q) ||
+        f.description.toLowerCase().includes(q) ||
         f.hlS3Key.toLowerCase().includes(q) ||
         f.wifiS3Key.toLowerCase().includes(q),
     )
@@ -439,6 +459,7 @@ export default function FirmwarePage() {
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">버전</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">HL 펌웨어</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi 펌웨어</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">설명</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">업로드 일시</th>
                 <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전송</th>
               </tr>
@@ -461,6 +482,9 @@ export default function FirmwarePage() {
                     <span className="flex items-center gap-1.5 font-mono text-[12px] text-foreground" title={f.wifiS3Key}>
                       <Wifi className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.wifiS3Key) || <span className="text-muted-foreground">—</span>}
                     </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="text-[13px] text-foreground">{f.description || <span className="text-muted-foreground">—</span>}</span>
                   </td>
                   <td className="px-5 py-3.5">
                     <span className="text-[13px] text-muted-foreground">{formatDateTime(f.uploadedAt)}</span>

@@ -15,6 +15,8 @@ export interface FirmwareResponseDto {
   hl_s3_key: string
   /** WiFi 모듈 펌웨어 S3 key */
   wifi_s3_key: string
+  /** 간단 설명(선택, REAL — 367714f) */
+  description: string | null
   uploaded_at: string
 }
 
@@ -26,5 +28,7 @@ export interface Firmware {
   hlS3Key: string
   /** WiFi 모듈 펌웨어 S3 key */
   wifiS3Key: string
+  /** 간단 설명 */
+  description: string
   uploadedAt: string
 }

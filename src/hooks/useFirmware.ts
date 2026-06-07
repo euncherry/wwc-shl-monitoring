@@ -15,6 +15,7 @@ function toFirmware(dto: FirmwareResponseDto): Firmware {
     version: dto.version,
     hlS3Key: dto.hl_s3_key ?? '',
     wifiS3Key: dto.wifi_s3_key ?? '',
+    description: dto.description ?? '',
     uploadedAt: dto.uploaded_at,
   }
 }

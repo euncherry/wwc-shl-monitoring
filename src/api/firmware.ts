@@ -7,6 +7,8 @@ export interface UploadFirmwareInput {
   hlFile: File
   /** WiFi 모듈 펌웨어 바이너리 */
   wifiFile: File
+  /** 간단 설명(선택, 255자) */
+  description?: string
 }
 
 /**
@@ -25,6 +27,7 @@ export const firmwareApi = {
     const form = new FormData()
     form.append('hl_file', input.hlFile)
     form.append('wifi_file', input.wifiFile)
+    if (input.description?.trim()) form.append('description', input.description.trim())
     const { data } = await apiClient.post<FirmwareResponseDto>('/firmware', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
