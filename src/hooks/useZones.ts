@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { zonesApi } from '@/api/zones'
-import { toTelecoilZone, toZoneDevice } from '@/lib/zoneMapper'
+import { toTelecoilZone } from '@/lib/zoneMapper'
+import { useDevices } from './useDevices'
 
 export const zoneKeys = {
   all: ['zones'] as const,
@@ -8,23 +10,63 @@ export const zoneKeys = {
   detail: (id: number) => [...zoneKeys.all, 'detail', id] as const,
 }
 
-/** 텔레코일존 목록 — TelecoilZone 뷰모델로 매핑(가동률=online 파생) */
-export function useZones() {
-  return useQuery({
-    queryKey: zoneKeys.list(),
-    queryFn: zonesApi.list,
-    select: (data) => data.map(toTelecoilZone),
-  })
+/** zone_id별 기기 수 맵 (GET /devices 파생) */
+function countByZone(devices: { telecoilZoneId: string | null }[] | undefined) {
+  const map = new Map<string, number>()
+  for (const d of devices ?? []) {
+    if (d.telecoilZoneId) map.set(d.telecoilZoneId, (map.get(d.telecoilZoneId) ?? 0) + 1)
+  }
+  return map
 }
 
-/** 텔레코일존 상세 — { zone, devices(HearingLoop[]) } */
+/**
+ * 텔레코일존 목록 — TelecoilZone 뷰모델.
+ * zone 응답엔 전체 기기 수가 없어 GET /devices에서 zone_id별로 집계해 deviceCount를 채운다.
+ */
+export function useZones() {
+  const zonesQ = useQuery({ queryKey: zoneKeys.list(), queryFn: zonesApi.list })
+  const devicesQ = useDevices()
+
+  const data = useMemo(() => {
+    if (!zonesQ.data) return undefined
+    const counts = countByZone(devicesQ.data)
+    return zonesQ.data.map((z) => toTelecoilZone(z, counts.get(String(z.id)) ?? 0))
+  }, [zonesQ.data, devicesQ.data])
+
+  return {
+    data,
+    isLoading: zonesQ.isLoading || devicesQ.isLoading,
+    isError: zonesQ.isError || devicesQ.isError,
+    refetch: () => {
+      zonesQ.refetch()
+      devicesQ.refetch()
+    },
+  }
+}
+
+/**
+ * 텔레코일존 상세 — { zone, devices(HearingLoop[]) }.
+ * 배정 기기 목록은 GET /devices에서 zone_id로 필터(실 텔레메트리).
+ */
 export function useZone(id: number | undefined) {
-  return useQuery({
+  const zoneQ = useQuery({
     queryKey: zoneKeys.detail(id ?? 0),
     queryFn: () => zonesApi.get(id as number),
     enabled: Boolean(id),
-    select: (dto) => ({ zone: toTelecoilZone(dto), devices: dto.devices.map(toZoneDevice) }),
   })
+  const devicesQ = useDevices()
+
+  const data = useMemo(() => {
+    if (!zoneQ.data) return undefined
+    const devices = (devicesQ.data ?? []).filter((d) => d.telecoilZoneId === String(zoneQ.data.id))
+    return { zone: toTelecoilZone(zoneQ.data, devices.length), devices }
+  }, [zoneQ.data, devicesQ.data])
+
+  return {
+    data,
+    isLoading: zoneQ.isLoading || devicesQ.isLoading,
+    isError: zoneQ.isError || devicesQ.isError,
+  }
 }
 
 /** 존 생성 (이름) — 통합 생성은 호출부에서 계정 생성과 오케스트레이션 */

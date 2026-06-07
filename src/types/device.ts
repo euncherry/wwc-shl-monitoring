@@ -77,6 +77,14 @@ export interface MockDeviceFields {
 /** 실응답 + MSW 목 병합 결과 (프론트가 실제로 받는 형태) */
 export type DeviceApiResponse = DeviceResponseDto & MockDeviceFields
 
+/** GET /devices — 페이지네이션 응답(DevicePageDto). 백엔드 7b79fc5에서 배열→객체로 변경됨. */
+export interface DevicePageDto {
+  data: DeviceApiResponse[]
+  total: number
+  page: number
+  limit: number
+}
+
 /** POST /devices/bulk 응답 (BulkCreateDeviceResponseDto) */
 export interface BulkCreateResult {
   created: DeviceResponseDto[]
@@ -141,51 +149,32 @@ export interface TelecoilZone {
    구역(Zone) API 응답 타입 (Swagger) — 3B 텔레코일존
    ══════════════════════════════════════════════════════ */
 
-/** ZoneResponseDto.devices[] (DeviceInZoneDto) — zone 응답에 포함된 기기 요약 */
-export interface DeviceInZoneDto {
-  id: number
-  mac_address: string
-  alias: string | null
-  status: ProvisionStatus
-  last_gpio_state: boolean | null
-  last_temperature: number | null
-  last_seen_at: string | null
-  created_at: string
-}
-
-/** ZoneResponseDto.user (UserSummaryDto) — email 없음(목으로 보강) */
+/** ZoneResponseDto.user (UserSummaryDto) — email 포함(REAL, b667885) */
 export interface UserSummary {
   id: number
   username: string
+  email: string
   name: string
   role: 'ADMIN' | 'ZONE_USER'
 }
 
-/** ZoneResponseDto */
+/**
+ * ZoneResponseDto (b667885 이후) — devices[] 제거, active_device_count·user.email 추가(REAL).
+ * ⚠️ 전체 기기 수(device_count)는 응답에 없음 → FE가 GET /devices에서 파생.
+ */
 export interface ZoneResponseDto {
   id: number
   name: string
-  devices: DeviceInZoneDto[]
+  /** 정상 가동(최근 5분 통신) 기기 수 — REAL DB 집계 */
+  active_device_count: number
   user: UserSummary | null
   created_at: string
 }
 
-/**
- * MSW가 zone 응답에 병합하는 목 필드(§13 — 백엔드 보강 요청 예정).
- * - managerEmail: 담당자(zone.user) 이메일 (실 user 응답엔 없음)
- * - activeDeviceCount: 정상 가동(온라인) 기기 수 — ⚠️ 목. last_seen은 이벤트기반이라 online 판정 불가(§3),
- *   백엔드에 "정상 가동 기기 수" 요청 예정. 가동률 = activeDeviceCount / devices.length.
- */
-export interface ZoneMockFields {
-  managerEmail?: string | null
-  activeDeviceCount?: number
+/** GET /zones — 페이지네이션 응답(ZonePageDto). 7b79fc5에서 배열→객체. */
+export interface ZonePageDto {
+  data: ZoneResponseDto[]
+  total: number
+  page: number
+  limit: number
 }
-
-/** 실 zone 응답 + MSW 목 병합 */
-export type ZoneApiResponse = ZoneResponseDto & ZoneMockFields
-
-/**
- * zone 상세의 기기 카드용 — DeviceInZoneDto + 목 텔레메트리(전원/네트워크/볼륨/펌웨어, 온도는 실값).
- * ⚠️ DeviceInZoneDto엔 firmware_version/is_connected가 없어 zone 상세 한정 목 유지(§2). 메인 /devices는 실값.
- */
-export type ZoneDeviceApiResponse = DeviceInZoneDto & MockDeviceFields & { firmware_version?: string | null }

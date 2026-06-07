@@ -1,38 +1,27 @@
 import { http, HttpResponse, bypass } from 'msw'
-import type { DeviceResponseDto, ZoneResponseDto } from '@/types/device'
+import type { DeviceResponseDto } from '@/types/device'
 import { mergeMockFields } from './deviceMock'
-import { mergeZoneMock, mergeZoneDetailMock } from './zoneMock'
 
 /**
- * MSW 핸들러 — 백엔드에 "아직 없는" API/필드만 처리(CLAUDE.md §3·§10·§13).
- * 등록되지 않은 경로는 그대로 통과 → 실제 staging 호출. 백엔드 배포 시 해당 핸들러를 제거해 실연동 전환.
+ * MSW 핸들러 — 백엔드에 "아직 없는" 필드만 처리(CLAUDE.md §3·§10·§13).
+ * 등록 안 된 경로는 그대로 통과 → 실 staging. 실값 내려오면 해당 처리를 제거.
  *
- * 현재 처리:
- * - GET /devices, GET /devices/:mac → passthrough 후 목 필드(power/network/volume/firmware/alerts) 병합.
- * - GET /zones        → managerEmail 목 병합. (deviceCount/online은 FE 매퍼에서 파생)
- * - GET /zones/:id    → managerEmail + 각 기기 텔레메트리(전원/네트워크/펌웨어) 목 병합.
- * - 기기 배정 해제(목) → DELETE /devices/:id/zone : 세션 오버라이드로 해제 흉내(백엔드 엔드포인트 없음).
- *   PUT /devices/:id/zone/:zoneId(실연동)는 가로채지 않고 통과시키되, 해제 오버라이드만 정리.
+ * 현재 처리: GET /devices, GET /devices/:mac → 응답에 목 필드(volume/alerts) 병합.
+ *   (전원·네트워크=is_connected 실값, 펌웨어버전·연결=실값으로 전환됨 → 더 이상 목 아님.
+ *    deviceMock의 power/network는 미사용이나 잔존, 실제 사용은 volume·alerts)
  *
- * 통과(실연동): POST /devices·/bulk, DELETE /devices/:id, PATCH /devices/:mac(별칭),
- *   PUT /devices/:id/zone/:zoneId(배정), /devices/:mac/status, /auth/*, /users/*, POST/PATCH/DELETE /zones …
+ * 통과(실연동): /zones·/zones/:id(active_device_count·user.email 실값), 배정해제 DELETE /devices/:id/zone(실 API),
+ *   POST /devices·/bulk, DELETE /devices/:id, PATCH /devices/:mac, PUT /devices/:id/zone/:zoneId,
+ *   /devices/:mac/status, /alerts*, /firmware*, /auth/*, /users/* …
  */
 
-/** 배정 해제(목) — 세션 동안 미배정으로 흉내낼 기기 id. 새로고침 시 초기화. */
-const unassignedDevices = new Set<number>()
-
 export const handlers = [
-  // 기기 목록: 목 필드 병합 + 해제 오버라이드 반영
+  // 기기 목록: 페이지네이션 응답({data,total,page,limit})의 data에 목 필드(volume/alerts) 병합
   http.get('*/devices', async ({ request }) => {
     const real = await fetch(bypass(request))
     if (!real.ok) return real
-    const devices = (await real.json()) as DeviceResponseDto[]
-    return HttpResponse.json(
-      devices.map((d) => {
-        const merged = mergeMockFields(d)
-        return unassignedDevices.has(d.id) ? { ...merged, zone_id: null, zone: null } : merged
-      }),
-    )
+    const page = (await real.json()) as { data: DeviceResponseDto[]; total: number; page: number; limit: number }
+    return HttpResponse.json({ ...page, data: (page.data ?? []).map(mergeMockFields) })
   }),
 
   // 기기 상세: 목 필드 병합 (`/devices/:mac/status`는 세그먼트가 더 많아 매칭 안 됨 → 통과)
@@ -41,39 +30,5 @@ export const handlers = [
     if (!real.ok) return real
     const device = (await real.json()) as DeviceResponseDto
     return HttpResponse.json(mergeMockFields(device))
-  }),
-
-  // 구역 목록: managerEmail 목 병합 + 해제된 기기 제외
-  http.get('*/zones', async ({ request }) => {
-    const real = await fetch(bypass(request))
-    if (!real.ok) return real
-    const zones = (await real.json()) as ZoneResponseDto[]
-    return HttpResponse.json(
-      zones.map((z) =>
-        mergeZoneMock({ ...z, devices: z.devices.filter((d) => !unassignedDevices.has(d.id)) }),
-      ),
-    )
-  }),
-
-  // 구역 상세: managerEmail + 기기 텔레메트리 목 병합 + 해제된 기기 제외
-  http.get('*/zones/:id', async ({ request }) => {
-    const real = await fetch(bypass(request))
-    if (!real.ok) return real
-    const zone = (await real.json()) as ZoneResponseDto
-    return HttpResponse.json(
-      mergeZoneDetailMock({ ...zone, devices: zone.devices.filter((d) => !unassignedDevices.has(d.id)) }),
-    )
-  }),
-
-  // 기기 배정 해제(목) — 백엔드 엔드포인트 없음. 세션 오버라이드에 기록.
-  http.delete('*/devices/:id/zone', ({ params }) => {
-    unassignedDevices.add(Number(params.id))
-    return HttpResponse.json({ id: Number(params.id), zone_id: null })
-  }),
-
-  // 기기 배정(실연동 PUT)은 통과시키되 해제 오버라이드만 정리(재배정 시 다시 보이도록)
-  http.put('*/devices/:id/zone/:zoneId', async ({ request, params }) => {
-    unassignedDevices.delete(Number(params.id))
-    return fetch(bypass(request))
   }),
 ]

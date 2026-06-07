@@ -456,11 +456,11 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                 <div className="mt-1 flex items-center gap-2"><Radio className="h-4 w-4 text-primary" /><span className="text-lg font-bold text-foreground">{zone.deviceCount}</span></div>
               </div>
               <div className="rounded-xl border border-border p-3">
-                <span className="flex items-center text-[11px] text-muted-foreground">정상 가동<MockBadge /></span>
+                <span className="flex items-center text-[11px] text-muted-foreground">정상 가동</span>
                 <div className="mt-1 flex items-center gap-2"><span className="text-lg font-bold text-success">{zone.activeDeviceCount}</span><span className="text-[12px] text-muted-foreground">/ {zone.deviceCount}</span></div>
               </div>
               <div className="rounded-xl border border-border p-3">
-                <span className="flex items-center text-[11px] text-muted-foreground">가동률<MockBadge /></span>
+                <span className="flex items-center text-[11px] text-muted-foreground">가동률</span>
                 <div className="mt-1.5 flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-border/50"><div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${rate}%` }} /></div>
                   <span className={`text-[12px] font-bold ${rate === 100 ? 'text-success' : rate >= 80 ? 'text-primary' : rate >= 60 ? 'text-warning' : 'text-destructive'}`}>{rate}%</span>
@@ -505,7 +505,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
               {/* 담당자 이메일 (목 — 계정 email) */}
               <div className="rounded-xl border border-border p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /><span className="flex items-center text-[13px] font-semibold text-foreground">담당자 이메일<MockBadge /></span></div>
+                  <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /><span className="flex items-center text-[13px] font-semibold text-foreground">담당자 이메일</span></div>
                   {zone.userAccount && (
                     <button onClick={() => { setEmailValue(zone.managerEmail); setEditingEmail(!editingEmail) }} className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/5"><Edit3 className="h-3 w-3" />{editingEmail ? '취소' : '수정'}</button>
                   )}
@@ -600,13 +600,13 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                               {d.alias?.trim() && <p className="truncate font-mono text-[10px] text-muted-foreground">{d.mac}</p>}
                             </div>
                           </div>
-                          <button onClick={() => unassign.mutate(Number(d.id))} disabled={unassign.isPending} title="배정 해제(목)" className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"><X className="h-4 w-4" /></button>
+                          <button onClick={() => unassign.mutate(Number(d.id))} disabled={unassign.isPending} title="배정 해제" className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"><X className="h-4 w-4" /></button>
                         </div>
                         <div className="grid grid-cols-4 gap-2">
-                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><PowerIcon on={d.power} /><span className="text-[10px] text-muted-foreground">전원<MockBadge /></span></div>
-                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><NetworkIcon connected={d.networkConnected} /><span className="text-[10px] text-muted-foreground">네트워크<MockBadge /></span></div>
+                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><PowerIcon on={d.power} /><span className="text-[10px] text-muted-foreground">전원</span></div>
+                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><NetworkIcon connected={d.networkConnected} /><span className="text-[10px] text-muted-foreground">네트워크</span></div>
                           <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><Thermometer className={`h-3.5 w-3.5 ${d.temperature > 45 ? 'text-destructive' : d.temperature > 40 ? 'text-warning' : 'text-success'}`} /><span className="text-[10px] font-bold text-foreground">{d.temperature > 0 ? `${d.temperature}°` : '—'}</span></div>
-                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><Cpu className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-[9px] font-mono font-bold text-foreground">{d.firmwareVersion || '—'}</span><span className="text-[9px] text-muted-foreground">펌웨어<MockBadge /></span></div>
+                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><Cpu className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-[9px] font-mono font-bold text-foreground">{d.firmwareVersion || '—'}</span><span className="text-[9px] text-muted-foreground">펌웨어</span></div>
                         </div>
                       </div>
                     ))}
@@ -729,7 +729,7 @@ export default function TelecoilZonesPage() {
           <div className="group relative ml-auto shrink-0">
             <Info className="h-4 w-4 cursor-help text-muted-foreground/50 hover:text-muted-foreground" />
             <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden w-64 rounded-lg bg-foreground px-3 py-2.5 text-[11px] font-normal leading-relaxed text-white shadow-lg group-hover:block">
-              <span className="font-semibold">상태 분류 기준</span><MockBadge />
+              <span className="font-semibold">상태 분류 기준</span>
               <span className="mt-1 block">· <span className="font-semibold text-success">정상</span> — 배정 기기 전부 정상 가동</span>
               <span className="block">· <span className="font-semibold text-warning">주의</span> — 일부만 정상 가동</span>
               <span className="block">· <span className="font-semibold">비활성</span> — 정상 가동 0대 / 기기 없음</span>
@@ -764,18 +764,18 @@ export default function TelecoilZonesPage() {
                     </div>
 
                     <div className="mb-4">
-                      <div className="mb-1.5 flex items-center justify-between"><span className="flex items-center text-[11px] text-muted-foreground">가동률<MockBadge /></span><span className={`text-[12px] font-bold tabular-nums ${rateTextColor}`}>{rate}%</span></div>
+                      <div className="mb-1.5 flex items-center justify-between"><span className="flex items-center text-[11px] text-muted-foreground">가동률</span><span className={`text-[12px] font-bold tabular-nums ${rateTextColor}`}>{rate}%</span></div>
                       <div className="h-2 overflow-hidden rounded-full bg-border/50"><div className={`h-full rounded-full ${rateColor} transition-all duration-500`} style={{ width: `${rate}%` }} /></div>
                     </div>
 
                     {/* 통계 — 전체장비(실) / 정상가동(목) (알림 제거) */}
                     <div className="mb-4 grid grid-cols-2 gap-2">
                       <div className="flex flex-col items-center gap-1 rounded-lg bg-page/50 py-2.5"><Radio className="h-3.5 w-3.5 text-primary" /><span className="text-[14px] font-bold text-foreground">{zone.deviceCount}</span><span className="text-[10px] text-muted-foreground">전체 장비</span></div>
-                      <div className="flex flex-col items-center gap-1 rounded-lg bg-page/50 py-2.5"><Power className="h-3.5 w-3.5 text-success" /><span className="text-[14px] font-bold text-success">{zone.activeDeviceCount}</span><span className="flex items-center text-[10px] text-muted-foreground">정상 가동<MockBadge /></span></div>
+                      <div className="flex flex-col items-center gap-1 rounded-lg bg-page/50 py-2.5"><Power className="h-3.5 w-3.5 text-success" /><span className="text-[14px] font-bold text-success">{zone.activeDeviceCount}</span><span className="flex items-center text-[10px] text-muted-foreground">정상 가동</span></div>
                     </div>
 
                     <div className="flex items-center justify-between border-t border-border/40 pt-3">
-                      <div className="flex min-w-0 items-center gap-1.5"><Mail className="h-3 w-3 shrink-0 text-muted-foreground" /><span className="truncate text-[11px] text-muted-foreground">{zone.managerEmail || '계정 없음'}</span><MockBadge /></div>
+                      <div className="flex min-w-0 items-center gap-1.5"><Mail className="h-3 w-3 shrink-0 text-muted-foreground" /><span className="truncate text-[11px] text-muted-foreground">{zone.managerEmail || '계정 없음'}</span></div>
                     </div>
                   </div>
                 )

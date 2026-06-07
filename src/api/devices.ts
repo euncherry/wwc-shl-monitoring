@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { DeviceApiResponse, BulkCreateResult, StatusLogPageDto } from '@/types/device'
+import type { DeviceApiResponse, BulkCreateResult, StatusLogPageDto, DevicePageDto } from '@/types/device'
 
 /** POST /devices, /devices/bulk 입력 (CreateDeviceDto) */
 export interface CreateDeviceInput {
@@ -10,10 +10,11 @@ export interface CreateDeviceInput {
 
 /** 기기 도메인 엔드포인트(REAL). MSW가 응답에 목 필드를 병합할 수 있음. */
 export const devicesApi = {
-  /** GET /devices — ADMIN=전체 / ZONE_USER=소속 */
+  /** GET /devices — ADMIN=전체 / ZONE_USER=소속. 페이지네이션 응답 → data 언래핑.
+   *  limit 크게 줘서 전체를 한 번에(현 규모). 필요 시 페이지 루프로 전환. */
   list: async () => {
-    const { data } = await apiClient.get<DeviceApiResponse[]>('/devices')
-    return data
+    const { data } = await apiClient.get<DevicePageDto>('/devices', { params: { limit: 1000 } })
+    return data.data
   },
 
   /** GET /devices/:mac */
@@ -59,7 +60,7 @@ export const devicesApi = {
     return data
   },
 
-  /** 배정 해제(목) — 백엔드 엔드포인트 없음. MSW DELETE /devices/:id/zone로 흉내(§13). */
+  /** DELETE /devices/:id/zone — 구역 배정 취소(실연동, c3afbaf). ADMIN. */
   unassignZone: async (id: number) => {
     await apiClient.delete(`/devices/${id}/zone`)
   },
