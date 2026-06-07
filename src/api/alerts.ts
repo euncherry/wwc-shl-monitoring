@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { AlertListResponseDto } from '@/types/alert'
+import type { AlertListResponseDto, AlertResponseDto, AlertStatusEnum } from '@/types/alert'
 
 /** GET /alerts 쿼리 파라미터 (AlertQueryDto) */
 export interface AlertListParams {
@@ -17,6 +17,12 @@ export const alertsApi = {
   /** GET /alerts — 관리자 전용, 필터·페이지네이션·통계 내장 */
   list: async (params: AlertListParams = {}) => {
     const { data } = await apiClient.get<AlertListResponseDto>('/alerts', { params })
+    return data
+  },
+
+  /** PATCH /alerts/:id — 전달/종결. ⚠️ PENDING일 때만 가능(아니면 400) */
+  updateStatus: async (id: number, status: Extract<AlertStatusEnum, 'FORWARDED' | 'DISMISSED'>) => {
+    const { data } = await apiClient.patch<AlertResponseDto>(`/alerts/${id}`, { status })
     return data
   },
 }
