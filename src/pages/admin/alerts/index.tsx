@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import {
   Bell,
@@ -19,10 +19,17 @@ import {
   AlertTriangle,
   Filter,
   Layers,
+  Settings,
   Loader2,
 } from 'lucide-react'
 import { alertsApi } from '@/api/alerts'
-import { alertKeys, useAlerts, useUpdateAlertStatus } from '@/hooks/useAlerts'
+import {
+  alertKeys,
+  useAlerts,
+  useUpdateAlertStatus,
+  useAlertThresholds,
+  useUpdateThresholds,
+} from '@/hooks/useAlerts'
 import {
   ALERT_TYPE_LABEL,
   type AlertResponseDto,
@@ -208,6 +215,82 @@ function AlertDetailModal({
   )
 }
 
+/* ── 알림 임계값 설정 모달 (REAL — 온도/미연결 시간) ── */
+
+function ThresholdsModal({ onClose }: { onClose: () => void }) {
+  const { data, isLoading } = useAlertThresholds()
+  const update = useUpdateThresholds()
+  const [temp, setTemp] = useState('')
+  const [conn, setConn] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (data) {
+      setTemp(String(data.temp_threshold))
+      setConn(String(data.connection_lost_hours))
+    }
+  }, [data])
+
+  const save = () => {
+    setError('')
+    const t = Number(temp)
+    const c = Number(conn)
+    if (!Number.isInteger(t) || t < 1) { setError('온도 임계값은 1 이상의 정수여야 합니다.'); return }
+    if (!Number.isInteger(c) || c < 1) { setError('미연결 시간은 1 이상의 정수여야 합니다.'); return }
+    update.mutate({ temp_threshold: t, connection_lost_hours: c }, {
+      onSuccess: onClose,
+      onError: () => setError('임계값 저장에 실패했습니다.'),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-page/50">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10"><Settings className="h-5 w-5 text-primary" /></div>
+            <div>
+              <h3 className="text-lg font-bold text-foreground">알림 설정</h3>
+              <p className="text-[12px] text-muted-foreground">온도·미연결 임계값 (자동 알림 발생 기준)</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors"><X className="h-5 w-5" /></button>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /><span className="text-[13px]">불러오는 중…</span></div>
+        ) : (
+          <div className="p-6 space-y-5">
+            <div className="rounded-xl border border-border p-4">
+              <label className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-foreground"><Thermometer className="h-4 w-4 text-destructive" />온도 임계값 (°C)</label>
+              <input type="number" min={1} value={temp} disabled={update.isPending}
+                onChange={(e) => setTemp(e.target.value)}
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">이 온도를 초과하면 '온도 이상' 알림이 발생합니다.</p>
+            </div>
+            <div className="rounded-xl border border-border p-4">
+              <label className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-foreground"><WifiOff className="h-4 w-4 text-primary" />미연결 임계값 (시간)</label>
+              <input type="number" min={1} value={conn} disabled={update.isPending}
+                onChange={(e) => setConn(e.target.value)}
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">이 시간 이상 미연결 시 '연결 끊김' 알림이 발생합니다.</p>
+            </div>
+            {error && <p className="flex items-center gap-1.5 text-[12px] font-semibold text-destructive"><AlertTriangle className="h-4 w-4 shrink-0" /> {error}</p>}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-page/30">
+          <button onClick={onClose} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">취소</button>
+          <button onClick={save} disabled={isLoading || update.isPending}
+            className="flex items-center gap-2 rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors disabled:opacity-50">
+            {update.isPending && <Loader2 className="h-4 w-4 animate-spin" />}저장
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ══════════════════════════════════════════════════════
    Main Page
    ══════════════════════════════════════════════════════ */
@@ -218,6 +301,7 @@ export default function AlertCenterPage() {
   const [priorityFilter, setPriorityFilter] = useState<AlertPriorityEnum | 'all'>('all')
   const [selectedAlert, setSelectedAlert] = useState<AlertResponseDto | null>(null)
   const [showTypeFilter, setShowTypeFilter] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [bulkRunning, setBulkRunning] = useState(false)
 
   const filters = {
@@ -271,9 +355,17 @@ export default function AlertCenterPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="pb-5 pt-5">
-        <h2 className="text-2xl font-black text-foreground tracking-tight">알림센터</h2>
-        <p className="text-sm text-muted-foreground mt-2">시스템에서 발생한 알림을 관리하고 처리 내역을 추적합니다.</p>
+      <div className="flex items-end justify-between pb-5 pt-5">
+        <div>
+          <h2 className="text-2xl font-black text-foreground tracking-tight">알림센터</h2>
+          <p className="text-sm text-muted-foreground mt-2">시스템에서 발생한 알림을 관리하고 처리 내역을 추적합니다.</p>
+        </div>
+        <button
+          onClick={() => setShowSettings(true)}
+          className="flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:bg-page transition-colors shadow-sm"
+        >
+          <Settings className="h-4 w-4" />알림 설정
+        </button>
       </div>
 
       {/* KPI Cards */}
@@ -467,6 +559,8 @@ export default function AlertCenterPage() {
           pending={update.isPending}
         />
       )}
+
+      {showSettings && <ThresholdsModal onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

@@ -62,3 +62,11 @@ export const ALERT_STATUS_LABEL: Record<AlertStatusEnum, string> = {
   FORWARDED: '전달됨',
   DISMISSED: '종결',
 }
+
+/** 알림 임계값 (AlertThresholdsDto, REAL — eeed421) */
+export interface AlertThresholds {
+  /** 온도 임계값 °C (초과 시 알림) */
+  temp_threshold: number
+  /** 미연결 임계값 시간 (이상 미연결 시 알림) */
+  connection_lost_hours: number
+}
