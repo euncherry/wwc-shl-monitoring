@@ -9,6 +9,7 @@ export const deviceKeys = {
   detail: (mac: string) => [...deviceKeys.all, 'detail', mac] as const,
   statusLogs: (mac: string, page: number, limit: number) =>
     [...deviceKeys.all, 'statusLogs', mac, page, limit] as const,
+  errors: (mac: string) => [...deviceKeys.all, 'errors', mac] as const,
 }
 
 /** 기기 목록 — HearingLoop 뷰모델로 매핑해서 반환 */
@@ -98,5 +99,14 @@ export function useUnassignZone() {
       qc.invalidateQueries({ queryKey: deviceKeys.all })
       qc.invalidateQueries({ queryKey: ['zones'] })
     },
+  })
+}
+
+/** 기기 에러 로그 (GET /devices/:mac/errors) */
+export function useDeviceErrors(mac: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: deviceKeys.errors(mac ?? ''),
+    queryFn: () => devicesApi.getErrors(mac as string),
+    enabled: enabled && Boolean(mac),
   })
 }

@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { DeviceApiResponse, BulkCreateResult, StatusLogPageDto, DevicePageDto } from '@/types/device'
+import type { DeviceApiResponse, BulkCreateResult, StatusLogPageDto, DevicePageDto, DeviceErrorLog } from '@/types/device'
 
 /** POST /devices, /devices/bulk 입력 (CreateDeviceDto) */
 export interface CreateDeviceInput {
@@ -63,5 +63,13 @@ export const devicesApi = {
   /** DELETE /devices/:id/zone — 구역 배정 취소(실연동, c3afbaf). ADMIN. */
   unassignZone: async (id: number) => {
     await apiClient.delete(`/devices/${id}/zone`)
+  },
+
+  /** GET /devices/:mac/errors — 기기 에러 로그(ADMIN) */
+  getErrors: async (mac: string): Promise<DeviceErrorLog[]> => {
+    const { data } = await apiClient.get<DeviceErrorLog[]>(
+      `/devices/${encodeURIComponent(mac)}/errors`,
+    )
+    return data
   },
 }

@@ -130,6 +130,16 @@ export interface SystemAlert {
   processedBy: string | null
 }
 
+/** GET /devices/:mac/errors — 기기 자체 에러 로그 */
+export interface DeviceErrorLog {
+  id: number
+  mac_address: string
+  code: string
+  message: string | null
+  occurred_at: string
+  created_at: string
+}
+
 export type ZoneStatus = 'active' | 'warning' | 'inactive'
 
 export interface TelecoilZone {

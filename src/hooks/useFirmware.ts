@@ -6,6 +6,10 @@ import type { Firmware, FirmwareResponseDto } from '@/types/firmware'
 export const firmwareKeys = {
   all: ['firmware'] as const,
   list: () => [...firmwareKeys.all, 'list'] as const,
+  sessions: (mac: string, page: number, limit: number) =>
+    [...firmwareKeys.all, 'sessions', mac, page, limit] as const,
+  sessionDetail: (sessionId: number, page: number, limit: number) =>
+    [...firmwareKeys.all, 'session', sessionId, page, limit] as const,
 }
 
 /** FirmwareResponseDto → 뷰모델 (구 응답엔 hl/wifi 키가 없을 수 있어 방어적으로 기본값) */
@@ -45,5 +49,32 @@ export function useUploadFirmware() {
 export function useSendFirmwareUpdate() {
   return useMutation({
     mutationFn: ({ id, mac }: { id: number; mac: string }) => firmwareApi.sendUpdate(id, mac),
+  })
+}
+
+/** 기기 업데이트 세션 목록 (GET /firmware/:mac/sessions) */
+export function useDeviceUpdateSessions(
+  mac: string | undefined,
+  page = 1,
+  limit = 10,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: firmwareKeys.sessions(mac ?? '', page, limit),
+    queryFn: () => firmwareApi.getSessions(mac as string, page, limit),
+    enabled: enabled && Boolean(mac),
+  })
+}
+
+/** 업데이트 세션 상세 (GET /firmware/sessions/:sessionId) */
+export function useUpdateSessionDetail(
+  sessionId: number | undefined,
+  page = 1,
+  limit = 50,
+) {
+  return useQuery({
+    queryKey: firmwareKeys.sessionDetail(sessionId ?? 0, page, limit),
+    queryFn: () => firmwareApi.getSessionDetail(sessionId as number, page, limit),
+    enabled: Boolean(sessionId),
   })
 }

@@ -30,6 +30,8 @@ import {
   Star,
   Check,
   ChevronDown,
+  RefreshCw,
+  ChevronLeft,
 } from 'lucide-react'
 import type { HearingLoop, DeviceStatusLogDto } from '@/types/device'
 import { formatDateTime } from '@/lib/format'
@@ -40,11 +42,14 @@ import {
   useCreateDevicesBulk,
   useAssignZone,
   useDeviceStatusLogs,
+  useDeviceErrors,
 } from '@/hooks/useDevices'
+import { useDeviceUpdateSessions, useUpdateSessionDetail } from '@/hooks/useFirmware'
 import { useAlerts } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 import { useZones } from '@/hooks/useZones'
 import type { CreateDeviceInput } from '@/api/devices'
+import type { UpdateSessionDto } from '@/types/firmware'
 
 /* ══════════════════════════════════════════════════════
    Sub-components
@@ -59,9 +64,9 @@ function useLockBodyScroll() {
   }, [])
 }
 
-/* ── 기기 이력 (알림 REAL / 상태 REAL / 전체 합본) ── */
+/* ── 기기 이력 (알림 REAL / 상태 REAL / 업데이트 REAL / 에러 REAL / 전체 합본) ── */
 
-type HistoryTab = 'alerts' | 'status' | 'all'
+type HistoryTab = 'alerts' | 'status' | 'updates' | 'errors' | 'all'
 
 function priorityStyle(p: AlertPriorityEnum) {
   if (p === 'CRITICAL') return { dot: 'bg-destructive', box: 'border-destructive/20 bg-destructive/5' }
@@ -98,13 +103,188 @@ function HistoryEmpty({ text }: { text: string }) {
   return <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{text}</p>
 }
 
+/* ── 업데이트 세션 상태 배지 ── */
+function SessionStatusBadge({ status }: { status: UpdateSessionDto['status'] }) {
+  if (status === 'complete') return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold text-success">
+      <CheckCircle2 className="h-3 w-3" /> 완료
+    </span>
+  )
+  if (status === 'failed') return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold text-destructive">
+      <AlertCircle className="h-3 w-3" /> 실패
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+      <Loader2 className="h-3 w-3 animate-spin" /> 진행 중
+    </span>
+  )
+}
+
+/* ── 세션 상세 모달 (기기 상세 위에 z-[60] 중첩) ── */
+function UpdateSessionDetailModal({ sessionId, onClose }: { sessionId: number; onClose: () => void }) {
+  useLockBodyScroll()
+  const [logPage, setLogPage] = useState(1)
+  const { data, isLoading, isError } = useUpdateSessionDetail(sessionId, logPage, 50)
+
+  const logs = data?.logs.data ?? []
+  const logTotal = data?.logs.total ?? 0
+  const totalPages = Math.ceil(logTotal / 50)
+
+  const statusLabel: Record<string, string> = {
+    downloading: '다운로드',
+    verifying: '검증',
+    flashing: '플래싱',
+    complete: '완료',
+    failed: '실패',
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-page/50 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+              <RefreshCw className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-foreground">업데이트 세션 #{sessionId}</h3>
+              {data && (
+                <p className="text-[12px] text-muted-foreground">
+                  펌웨어 v{data.firmware_version} · {formatDateTime(data.triggered_at)}
+                </p>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" /><span className="text-[13px]">불러오는 중…</span>
+            </div>
+          ) : isError ? (
+            <HistoryEmpty text="세션 상세를 불러오지 못했습니다." />
+          ) : (
+            <>
+              {/* 세션 메타 */}
+              {data && (
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-page/30 px-4 py-3">
+                  <SessionStatusBadge status={data.status} />
+                  <span className="text-[12px] text-muted-foreground">
+                    요청: {formatDateTime(data.triggered_at)}
+                    {data.completed_at && <> · 완료: {formatDateTime(data.completed_at)}</>}
+                  </span>
+                </div>
+              )}
+
+              {/* 로그 목록 */}
+              <div>
+                <p className="mb-2 text-[12px] font-semibold text-muted-foreground">
+                  업데이트 로그 ({logTotal}건)
+                </p>
+                {logs.length === 0 ? (
+                  <HistoryEmpty text="로그가 없습니다." />
+                ) : (
+                  <div className="space-y-1.5">
+                    {logs.map((log) => (
+                      <div
+                        key={log.id}
+                        className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-[12px] ${
+                          log.status === 'complete' ? 'border-success/20 bg-success/5'
+                          : log.status === 'failed' ? 'border-destructive/20 bg-destructive/5'
+                          : 'border-border bg-white'
+                        }`}
+                      >
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                          log.type === 'self' ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'
+                        }`}>
+                          {log.type === 'self' ? 'ESP32' : 'Nordic'}
+                        </span>
+                        <span className="w-16 shrink-0 font-mono font-bold text-foreground">
+                          {log.progress_percent != null ? `${log.progress_percent}%` : '—'}
+                        </span>
+                        <span className={`shrink-0 font-semibold ${
+                          log.status === 'complete' ? 'text-success'
+                          : log.status === 'failed' ? 'text-destructive'
+                          : 'text-foreground'
+                        }`}>
+                          {log.status ? statusLabel[log.status] ?? log.status : '—'}
+                        </span>
+                        {log.message && (
+                          <span className="min-w-0 flex-1 truncate text-muted-foreground">{log.message}</span>
+                        )}
+                        <span className="shrink-0 text-muted-foreground">{formatDateTime(log.occurred_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 로그 페이지네이션 */}
+                {totalPages > 1 && (
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setLogPage((p) => Math.max(1, p - 1))}
+                      disabled={logPage === 1}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page disabled:opacity-40"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="text-[12px] text-muted-foreground">{logPage} / {totalPages}</span>
+                    <button
+                      onClick={() => setLogPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={logPage === totalPages}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page disabled:opacity-40"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex shrink-0 justify-end border-t border-border bg-page/30 px-6 py-4">
+          <button onClick={onClose} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   const [tab, setTab] = useState<HistoryTab>('alerts')
+  const [updatePage, setUpdatePage] = useState(1)
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null)
+
   const alertsQ = useAlerts({ device_id: deviceId, limit: 20 })
   const statusQ = useDeviceStatusLogs(mac, 1, 20)
+  const updatesQ = useDeviceUpdateSessions(mac, updatePage, 10)
+  const errorsQ = useDeviceErrors(mac)
 
   const alerts = alertsQ.data?.items ?? []
   const logs = statusQ.data?.data ?? []
+  const sessions = updatesQ.data?.data ?? []
+  const sessionTotal = updatesQ.data?.total ?? 0
+  const errors = errorsQ.data ?? []
+
+  const sessionTotalPages = Math.ceil(sessionTotal / 10)
 
   const merged = useMemo(() => {
     const items = [
@@ -117,15 +297,29 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   const tabs: { key: HistoryTab; label: string; count: number }[] = [
     { key: 'alerts', label: '알림 이력', count: alerts.length },
     { key: 'status', label: '상태 이력', count: logs.length },
+    { key: 'updates', label: '업데이트 이력', count: sessionTotal },
+    { key: 'errors', label: '에러 로그', count: errors.length },
     { key: 'all', label: '전체보기', count: merged.length },
   ]
 
-  const isLoading = tab === 'status' ? statusQ.isLoading : tab === 'alerts' ? alertsQ.isLoading : alertsQ.isLoading || statusQ.isLoading
-  const isError = tab === 'status' ? statusQ.isError : tab === 'alerts' ? alertsQ.isError : alertsQ.isError || statusQ.isError
+  const isLoading =
+    tab === 'status' ? statusQ.isLoading
+    : tab === 'alerts' ? alertsQ.isLoading
+    : tab === 'updates' ? updatesQ.isLoading
+    : tab === 'errors' ? errorsQ.isLoading
+    : alertsQ.isLoading || statusQ.isLoading
+
+  const isError =
+    tab === 'status' ? statusQ.isError
+    : tab === 'alerts' ? alertsQ.isError
+    : tab === 'updates' ? updatesQ.isError
+    : tab === 'errors' ? errorsQ.isError
+    : alertsQ.isError || statusQ.isError
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-1">
+      {/* 탭 헤더 */}
+      <div className="mb-3 flex flex-wrap items-center gap-1">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -135,7 +329,9 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
             }`}
           >
             {t.label}
-            <span className={`text-[10px] font-bold ${tab === t.key ? 'opacity-80' : 'text-muted-foreground/60'}`}>{t.count}</span>
+            <span className={`text-[10px] font-bold ${tab === t.key ? 'opacity-80' : 'text-muted-foreground/60'}`}>
+              {t.count}
+            </span>
           </button>
         ))}
       </div>
@@ -150,12 +346,83 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
         alerts.length ? <div className="space-y-2">{alerts.map((a) => <AlertRow key={a.id} a={a} />)}</div> : <HistoryEmpty text="알림 이력이 없습니다." />
       ) : tab === 'status' ? (
         logs.length ? <div className="space-y-2">{logs.map((s) => <StatusRow key={s.id} s={s} />)}</div> : <HistoryEmpty text="상태 이력이 없습니다." />
+      ) : tab === 'updates' ? (
+        <>
+          {sessions.length === 0 ? (
+            <HistoryEmpty text="업데이트 이력이 없습니다." />
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                {sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    onClick={() => setSelectedSessionId(session.id)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-left text-[12px] hover:border-primary/30 hover:bg-page/50 transition-colors"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="shrink-0 font-mono font-bold text-foreground">v{session.firmware_version}</span>
+                    <SessionStatusBadge status={session.status} />
+                    <span className="min-w-0 flex-1 text-muted-foreground">{formatDateTime(session.triggered_at)}</span>
+                    {session.completed_at && (
+                      <span className="shrink-0 text-muted-foreground">→ {formatDateTime(session.completed_at)}</span>
+                    )}
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+
+              {/* 세션 페이지네이션 */}
+              {sessionTotalPages > 1 && (
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setUpdatePage((p) => Math.max(1, p - 1))}
+                    disabled={updatePage === 1}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="text-[12px] text-muted-foreground">{updatePage} / {sessionTotalPages}</span>
+                  <button
+                    onClick={() => setUpdatePage((p) => Math.min(sessionTotalPages, p + 1))}
+                    disabled={updatePage === sessionTotalPages}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      ) : tab === 'errors' ? (
+        errors.length === 0 ? (
+          <HistoryEmpty text="에러 로그가 없습니다." />
+        ) : (
+          <div className="space-y-1.5">
+            {errors.map((e) => (
+              <div key={e.id} className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-[12px]">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                <span className="shrink-0 font-mono font-bold text-foreground">{e.code}</span>
+                {e.message && <span className="min-w-0 flex-1 truncate text-muted-foreground">{e.message}</span>}
+                <span className="shrink-0 text-muted-foreground">{formatDateTime(e.occurred_at)}</span>
+              </div>
+            ))}
+          </div>
+        )
       ) : merged.length ? (
         <div className="space-y-2">
           {merged.map((m) => (m.kind === 'alert' ? <AlertRow key={`a${m.a.id}`} a={m.a} /> : <StatusRow key={`s${m.s.id}`} s={m.s} />))}
         </div>
       ) : (
         <HistoryEmpty text="이력이 없습니다." />
+      )}
+
+      {/* 세션 상세 모달 (중첩) */}
+      {selectedSessionId && (
+        <UpdateSessionDetailModal
+          sessionId={selectedSessionId}
+          onClose={() => setSelectedSessionId(null)}
+        />
       )}
     </div>
   )

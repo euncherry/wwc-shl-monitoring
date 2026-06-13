@@ -17,7 +17,8 @@ import {
 import type { Firmware as FirmwareVM } from '@/types/firmware'
 import type { HearingLoop } from '@/types/device'
 import { formatDateTime } from '@/lib/format'
-import { useFirmwares, useUploadFirmware, useSendFirmwareUpdate } from '@/hooks/useFirmware'
+import { useFirmwares, useUploadFirmware } from '@/hooks/useFirmware'
+import { firmwareApi } from '@/api/firmware'
 import { useDevices } from '@/hooks/useDevices'
 
 /* ══════════════════════════════════════════════════════
@@ -166,20 +167,58 @@ function UploadModal({ onClose }: { onClose: () => void }) {
 }
 
 /* ══════════════════════════════════════════════════════
-   Send Modal — 버전 선택 → 여러 기기 선택 → 순차 개별 전송(REAL)
+   Send Modal — 기기 선택 → SSE 구독 선행 → POST 트리거 → 실시간 진행 바
    ══════════════════════════════════════════════════════ */
 
-type SendResult = 'ok' | 'fail'
+type ProgressPhase = 'waiting' | 'connecting' | 'in_progress' | 'complete' | 'failed'
+
+interface McuState {
+  progress: number
+  status: string
+}
+
+interface DeviceProgress {
+  phase: ProgressPhase
+  self: McuState | null
+  target: McuState | null
+  errorMessage: string | null
+  sessionId: number | null
+}
+
+/** self / target 진행 바 한 줄 */
+function ProgressBar({ label, mcu }: { label: string; mcu: McuState | null }) {
+  const pct = mcu?.progress ?? 0
+  const isDone = mcu?.status === 'complete'
+  const isFail = mcu?.status === 'failed'
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-[11px]">
+        <span className="font-semibold text-muted-foreground">{label}</span>
+        <span className={`font-mono font-bold ${isDone ? 'text-success' : isFail ? 'text-destructive' : 'text-primary'}`}>
+          {mcu ? `${pct}%` : '—'}
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-border/50">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${isDone ? 'bg-success' : isFail ? 'bg-destructive' : 'bg-primary'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {mcu?.status && mcu.status !== 'complete' && mcu.status !== 'failed' && (
+        <p className="mt-0.5 text-[10px] text-muted-foreground capitalize">{mcu.status}…</p>
+      )}
+    </div>
+  )
+}
 
 function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () => void }) {
   useLockBodyScroll()
   const { data: devices, isLoading } = useDevices()
-  const sendUpdate = useSendFirmwareUpdate()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sending, setSending] = useState(false)
-  const [results, setResults] = useState<Record<string, SendResult>>({})
   const [done, setDone] = useState(false)
+  const [progress, setProgress] = useState<Record<string, DeviceProgress>>({})
 
   const candidates = useMemo(() => {
     const list = devices ?? []
@@ -205,7 +244,6 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
     )
   }
 
-  // 텔레코일존별 그룹 (미배정은 맨 아래)
   const UNASSIGNED = 'unassigned'
   const groups = useMemo(() => {
     const map = new Map<string, HearingLoop[]>()
@@ -235,29 +273,109 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
     })
   }
 
-  // 선택된 기기에 순차 전송 (개별 POST /firmware/:id/send/:mac 반복 — self+target 동시 발송)
+  /**
+   * 전송 순서 (스펙 준수, 기기별 병렬):
+   * 1. SSE 구독 먼저 (초기 이벤트 유실 방지)
+   * 2. POST /firmware/:id/send/:mac 트리거
+   * 3. SSE 이벤트로 self/target 진행 바 업데이트
+   * 4. 스트림 자동 종료(complete/failed) → Promise resolve
+   * 전체 기기를 Promise.all 로 동시에 처리
+   */
   const send = async () => {
     setSending(true)
-    const next: Record<string, SendResult> = {}
-    for (const mac of selected) {
-      try {
-        await sendUpdate.mutateAsync({ id: firmware.id, mac })
-        next[mac] = 'ok'
-      } catch {
-        next[mac] = 'fail'
-      }
-      setResults({ ...next })
-    }
+    const macList = [...selected]
+
+    // 전체 기기 connecting 으로 초기화 (waiting 없이 바로 시작)
+    setProgress(
+      Object.fromEntries(
+        macList.map((mac) => [mac, { phase: 'connecting' as ProgressPhase, self: null, target: null, errorMessage: null, sessionId: null }]),
+      ),
+    )
+
+    await Promise.all(
+      macList.map(
+        (mac) =>
+          new Promise<void>((resolve) => {
+            let settled = false
+            const settle = () => { if (!settled) { settled = true; resolve() } }
+
+            // Step 1: SSE 구독
+            const unsubscribe = firmwareApi.subscribeUpdateProgress(
+              mac,
+              (event) => {
+                setProgress((prev) => {
+                  const curr = prev[mac] ?? { phase: 'in_progress', self: null, target: null, errorMessage: null, sessionId: null }
+                  const mcuState: McuState = { progress: event.progress_percent, status: event.status }
+                  const phase: ProgressPhase = event.status === 'failed' ? 'failed' : 'in_progress'
+                  const errorMessage = event.status === 'failed' ? (event.message ?? '업데이트 실패') : curr.errorMessage
+                  return {
+                    ...prev,
+                    [mac]: { ...curr, phase, [event.type]: mcuState, errorMessage },
+                  }
+                })
+              },
+              () => {
+                // 스트림 종료 처리
+                // connecting 상태 = SSE 이벤트를 한 번도 못 받고 끊김 → 연결 실패
+                setProgress((prev) => {
+                  const curr = prev[mac]
+                  if (!curr) return prev
+                  if (curr.phase === 'connecting') {
+                    return { ...prev, [mac]: { ...curr, phase: 'failed', errorMessage: 'SSE 연결 실패' } }
+                  }
+                  const finalPhase: ProgressPhase = curr.phase === 'failed' ? 'failed' : 'complete'
+                  return { ...prev, [mac]: { ...curr, phase: finalPhase } }
+                })
+                settle()
+              },
+            )
+
+            // Step 2: 업데이트 트리거
+            firmwareApi.sendUpdate(firmware.id, mac)
+              .then((resp) => {
+                setProgress((prev) => {
+                  const curr = prev[mac]
+                  if (!curr) return prev
+                  return { ...prev, [mac]: { ...curr, sessionId: resp.session_id } }
+                })
+              })
+              .catch(() => {
+                setProgress((prev) => ({
+                  ...prev,
+                  [mac]: { phase: 'failed', self: null, target: null, errorMessage: '전송 요청 실패', sessionId: null },
+                }))
+                unsubscribe()
+                settle()
+              })
+
+            // 2분 타임아웃
+            setTimeout(() => {
+              setProgress((prev) => {
+                const curr = prev[mac]
+                if (!curr || curr.phase === 'complete' || curr.phase === 'failed') return prev
+                return { ...prev, [mac]: { ...curr, phase: 'failed', errorMessage: '응답 시간 초과' } }
+              })
+              unsubscribe()
+              settle()
+            }, 120_000)
+          }),
+      ),
+    )
+
     setSending(false)
     setDone(true)
   }
 
-  const okCount = Object.values(results).filter((r) => r === 'ok').length
-  const failCount = Object.values(results).filter((r) => r === 'fail').length
+  const progList = Object.values(progress)
+  const okCount = progList.filter((p) => p.phase === 'complete').length
+  const failCount = progList.filter((p) => p.phase === 'failed').length
+
+  const inProgress = sending || done
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border bg-page/50 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -266,7 +384,8 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
             <div>
               <h3 className="text-lg font-bold text-foreground">펌웨어 업데이트 전송</h3>
               <p className="text-[12px] text-muted-foreground">
-                <span className="font-mono font-semibold text-primary">v{firmware.version}</span> 을(를) 보낼 기기를 선택하세요. (HL·WiFi 동시 발송)
+                <span className="font-mono font-semibold text-primary">v{firmware.version}</span>
+                {inProgress ? ' 업데이트 진행 중' : ' — 기기를 선택하세요 (HL·WiFi 동시 발송)'}
               </p>
             </div>
           </div>
@@ -275,37 +394,48 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
           </button>
         </div>
 
-        {/* Search + select all */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="기기 검색 (별칭·MAC)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
+        {/* Search + select all (선택 단계만) */}
+        {!inProgress && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="기기 검색 (별칭·MAC)"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <button
+              onClick={toggleAll}
+              disabled={candidates.length === 0}
+              className="shrink-0 rounded-lg border border-border bg-white px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              {selected.size === candidates.length && candidates.length > 0 ? '전체 해제' : '전체 선택'}
+            </button>
           </div>
-          <button
-            onClick={toggleAll}
-            disabled={sending || done || candidates.length === 0}
-            className="shrink-0 rounded-lg border border-border bg-white px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-          >
-            {selected.size === candidates.length && candidates.length > 0 ? '전체 해제' : '전체 선택'}
-          </button>
-        </div>
+        )}
 
+        {/* 기기 목록 */}
         <div className="flex-1 overflow-y-auto scrollbar-thin p-3">
           {isLoading ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /><p className="text-[13px]">불러오는 중…</p></div>
-          ) : candidates.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10"><Radio className="h-7 w-7 text-muted-foreground/30" /><p className="text-[13px] text-muted-foreground">전송할 기기가 없습니다.</p></div>
+            <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" /><p className="text-[13px]">불러오는 중…</p>
+            </div>
+          ) : candidates.length === 0 && !inProgress ? (
+            <div className="flex flex-col items-center gap-2 py-10">
+              <Radio className="h-7 w-7 text-muted-foreground/30" />
+              <p className="text-[13px] text-muted-foreground">전송할 기기가 없습니다.</p>
+            </div>
           ) : (
             <div className="space-y-4">
               {groups.map((g) => {
                 const groupAll = g.list.every((d) => selected.has(d.mac))
                 const groupSel = g.list.filter((d) => selected.has(d.mac)).length
+                // 전송 단계에서는 선택된 기기만 표시
+                const visibleList = inProgress ? g.list.filter((d) => selected.has(d.mac)) : g.list
+                if (inProgress && visibleList.length === 0) return null
                 return (
                   <div key={g.key}>
                     {/* 존 헤더 */}
@@ -313,42 +443,112 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                       <div className="flex items-center gap-1.5">
                         <Building2 className={`h-3.5 w-3.5 ${g.key === UNASSIGNED ? 'text-warning' : 'text-muted-foreground'}`} />
                         <span className="text-[12px] font-bold text-foreground">{g.name}</span>
-                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-page px-1 text-[10px] font-bold text-muted-foreground">{g.list.length}</span>
-                        {groupSel > 0 && <span className="text-[10px] font-semibold text-primary">{groupSel}대 선택</span>}
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-page px-1 text-[10px] font-bold text-muted-foreground">
+                          {inProgress ? visibleList.length : g.list.length}
+                        </span>
+                        {!inProgress && groupSel > 0 && (
+                          <span className="text-[10px] font-semibold text-primary">{groupSel}대 선택</span>
+                        )}
                       </div>
-                      <button
-                        onClick={() => toggleGroup(g.list)}
-                        disabled={sending || done}
-                        className="text-[11px] font-semibold text-primary hover:text-primary-dark transition-colors disabled:opacity-40"
-                      >
-                        {groupAll ? '존 해제' : '존 전체'}
-                      </button>
+                      {!inProgress && (
+                        <button
+                          onClick={() => toggleGroup(g.list)}
+                          className="text-[11px] font-semibold text-primary hover:text-primary-dark transition-colors"
+                        >
+                          {groupAll ? '존 해제' : '존 전체'}
+                        </button>
+                      )}
                     </div>
-                    {/* 기기 목록 */}
+
+                    {/* 기기 카드 */}
                     <div className="space-y-1.5">
-                      {g.list.map((d) => {
+                      {visibleList.map((d) => {
                         const checked = selected.has(d.mac)
-                        const result = results[d.mac]
+                        const prog = progress[d.mac]
+
+                        if (inProgress) {
+                          // 전송/완료 단계: 진행 상태 카드
+                          const phase = prog?.phase ?? 'waiting'
+                          return (
+                            <div
+                              key={d.id}
+                              className={`rounded-xl border px-3.5 py-2.5 transition-colors ${
+                                phase === 'complete' ? 'border-success/30 bg-success/5'
+                                : phase === 'failed' ? 'border-destructive/30 bg-destructive/5'
+                                : phase === 'in_progress' ? 'border-primary/30 bg-primary/5'
+                                : 'border-border bg-page/30'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                  <Radio className="h-4 w-4 text-primary" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-[13px] font-bold text-foreground">
+                                    {d.alias?.trim() ? d.alias : d.mac}
+                                  </p>
+                                  {d.alias?.trim() && (
+                                    <p className="truncate font-mono text-[11px] text-muted-foreground">{d.mac}</p>
+                                  )}
+                                </div>
+                                {/* 상태 아이콘 */}
+                                {phase === 'waiting' && (
+                                  <span className="text-[11px] text-muted-foreground">대기 중</span>
+                                )}
+                                {phase === 'connecting' && (
+                                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                                )}
+                                {phase === 'complete' && (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                                )}
+                                {phase === 'failed' && (
+                                  <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                                )}
+                              </div>
+
+                              {/* 진행 바 (in_progress) */}
+                              {phase === 'in_progress' && (
+                                <div className="mt-3 space-y-2.5">
+                                  <ProgressBar label="ESP32 MCU (HL)" mcu={prog?.self ?? null} />
+                                  <ProgressBar label="Nordic MCU (WiFi)" mcu={prog?.target ?? null} />
+                                </div>
+                              )}
+
+                              {/* 완료 후 세션 링크 */}
+                              {phase === 'complete' && prog?.sessionId && (
+                                <p className="mt-1.5 text-[11px] text-success">
+                                  세션 #{prog.sessionId} — 기기 상세에서 이력을 확인할 수 있습니다.
+                                </p>
+                              )}
+
+                              {/* 실패 메시지 */}
+                              {phase === 'failed' && prog?.errorMessage && (
+                                <p className="mt-1.5 text-[11px] text-destructive">{prog.errorMessage}</p>
+                              )}
+                            </div>
+                          )
+                        }
+
+                        // 선택 단계: 기존 체크박스 카드
                         return (
                           <button
                             key={d.id}
                             onClick={() => toggle(d.mac)}
-                            disabled={sending || done}
-                            className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors disabled:cursor-default ${
+                            className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
                               checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/30 hover:bg-page/50'
                             }`}
                           >
                             <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${checked ? 'border-primary bg-primary text-white' : 'border-border bg-white'}`}>
                               {checked && <CheckCircle2 className="h-3.5 w-3.5" />}
                             </span>
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10"><Radio className="h-4 w-4 text-primary" /></div>
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                              <Radio className="h-4 w-4 text-primary" />
+                            </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[13px] font-bold text-foreground">{d.alias?.trim() ? d.alias : d.mac}</p>
                               {d.alias?.trim() && <p className="truncate font-mono text-[11px] text-muted-foreground">{d.mac}</p>}
                             </div>
                             <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{d.firmwareVersion || '—'}</span>
-                            {result === 'ok' && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
-                            {result === 'fail' && <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />}
                           </button>
                         )
                       })}
@@ -360,24 +560,34 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
           )}
         </div>
 
+        {/* Footer */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-page/30 px-6 py-4">
           <span className="text-[12px] text-muted-foreground">
             {done ? (
-              <>전송 완료 — 성공 <span className="font-bold text-success">{okCount}</span>{failCount > 0 && <> · 실패 <span className="font-bold text-destructive">{failCount}</span></>}</>
+              <>
+                완료 — 성공 <span className="font-bold text-success">{okCount}</span>
+                {failCount > 0 && <> · 실패 <span className="font-bold text-destructive">{failCount}</span></>}
+              </>
+            ) : sending ? (
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> 전송 중…
+              </span>
             ) : (
               <><span className="font-bold text-foreground">{selected.size}</span>대 선택됨</>
             )}
           </span>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">{done ? '닫기' : '취소'}</button>
-            {!done && (
+            <button onClick={onClose} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">
+              {done ? '닫기' : '취소'}
+            </button>
+            {!done && !sending && (
               <button
                 onClick={send}
-                disabled={sending || selected.size === 0}
+                disabled={selected.size === 0}
                 className="flex items-center gap-2 rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors disabled:opacity-50"
               >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {sending ? '전송 중…' : '선택 전송'}
+                <Send className="h-4 w-4" />
+                선택 전송
               </button>
             )}
           </div>
