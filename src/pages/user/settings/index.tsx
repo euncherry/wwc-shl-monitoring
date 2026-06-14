@@ -53,6 +53,7 @@ function EditableField({
   onSave,
   placeholder,
   type = 'text',
+  mock = false,
 }: {
   label: string
   value: string
@@ -60,6 +61,7 @@ function EditableField({
   onSave: (val: string) => Promise<void> | void
   placeholder?: string
   type?: string
+  mock?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [temp, setTemp] = useState(value)
@@ -102,7 +104,10 @@ function EditableField({
         <Icon className="h-4 w-4 text-primary" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] text-muted-foreground mb-1">{label}</p>
+        <p className="text-[12px] text-muted-foreground mb-1">
+          {label}
+          {mock && <span className="ml-1 inline-block rounded bg-warning/10 px-1.5 py-0.5 text-[9px] font-bold text-warning align-middle">목</span>}
+        </p>
         {editing ? (
           <>
             <div className="flex items-center gap-2">
@@ -289,6 +294,7 @@ export default function UserSettings() {
               icon={MapPin}
               onSave={(val) => updateInstitution('address', val)}
               placeholder="주소를 입력하세요"
+              mock
             />
             <EditableField
               label="대표번호"
@@ -297,6 +303,7 @@ export default function UserSettings() {
               onSave={(val) => updateInstitution('phone', val)}
               placeholder="전화번호를 입력하세요"
               type="tel"
+              mock
             />
           </div>
         </div>
