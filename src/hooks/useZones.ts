@@ -10,11 +10,15 @@ export const zoneKeys = {
   detail: (id: number) => [...zoneKeys.all, 'detail', id] as const,
 }
 
-/** zone_id별 기기 수 맵 (GET /devices 파생) */
-function countByZone(devices: { telecoilZoneId: string | null }[] | undefined) {
-  const map = new Map<string, number>()
+/** zone_id별 { 전체 기기 수, 정상가동(ONLINE) 수 } 맵 (GET /devices의 connection_status 파생) */
+function countByZone(devices: { telecoilZoneId: string | null; connectionStatus: string }[] | undefined) {
+  const map = new Map<string, { total: number; online: number }>()
   for (const d of devices ?? []) {
-    if (d.telecoilZoneId) map.set(d.telecoilZoneId, (map.get(d.telecoilZoneId) ?? 0) + 1)
+    if (!d.telecoilZoneId) continue
+    const e = map.get(d.telecoilZoneId) ?? { total: 0, online: 0 }
+    e.total += 1
+    if (d.connectionStatus === 'ONLINE') e.online += 1
+    map.set(d.telecoilZoneId, e)
   }
   return map
 }
@@ -30,7 +34,10 @@ export function useZones() {
   const data = useMemo(() => {
     if (!zonesQ.data) return undefined
     const counts = countByZone(devicesQ.data)
-    return zonesQ.data.map((z) => toTelecoilZone(z, counts.get(String(z.id)) ?? 0))
+    return zonesQ.data.map((z) => {
+      const c = counts.get(String(z.id)) ?? { total: 0, online: 0 }
+      return toTelecoilZone(z, c.total, c.online)
+    })
   }, [zonesQ.data, devicesQ.data])
 
   return {
@@ -59,7 +66,8 @@ export function useZone(id: number | undefined) {
   const data = useMemo(() => {
     if (!zoneQ.data) return undefined
     const devices = (devicesQ.data ?? []).filter((d) => d.telecoilZoneId === String(zoneQ.data.id))
-    return { zone: toTelecoilZone(zoneQ.data, devices.length), devices }
+    const online = devices.filter((d) => d.connectionStatus === 'ONLINE').length
+    return { zone: toTelecoilZone(zoneQ.data, devices.length, online), devices }
   }, [zoneQ.data, devicesQ.data])
 
   return {
