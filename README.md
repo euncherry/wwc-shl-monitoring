@@ -83,10 +83,10 @@ NestJS 백엔드(AWS staging)와 **실연동**하며, 백엔드에 아직 없는
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | 로그인 / 인증 (JWT·역할분기) | ✅ 실연동 | `POST /auth/login`, `GET /users/me` |
-| 관리자 · 히어링루프 관리 | ✅ 실연동 | 목록·상세·등록·삭제·별칭·존배정 실연동 / 전원·네트워크·볼륨·펌웨어버전·상태는 목·파생 |
-| 관리자 · 텔레코일존 관리 | ✅ 실연동 | 존 CRUD·계정 생성/PW재설정·기기 배정 실연동 / 통합생성·주소·대표번호·담당자이메일은 목 |
-| 관리자 · 펌웨어 관리 | ✅ 실연동 | 업로드·목록·개별 전송 실연동 / 설명(description)·전체전송은 목 |
-| 관리자 · 알림센터 | 🚧 진행 예정 | 백엔드 알림 모듈 없음 → 전부 MSW 목 예정 |
+| 관리자 · 히어링루프 관리 | ✅ 실연동 | 목록·상세·등록·삭제·별칭·존배정 + **전원·동작(connection_status)·WiFi(wifi_signal)·과열(gpio)·펌웨어버전** 실값 / 볼륨·온도 제거 |
+| 관리자 · 텔레코일존 관리 | ✅ 실연동 | 존 CRUD·계정 생성/PW재설정·기기 배정/해제(확인 모달) / 통합생성·주소·대표번호는 목 |
+| 관리자 · 펌웨어 관리 | ✅ 실연동 | 업로드(설명 포함)·목록·개별 전송(ONLINE 기기만)·SSE 진행률·세션 이력 / 전체전송(broadcast) 없음 |
+| 관리자 · 알림센터 | ✅ 실연동 | `/alerts`·처리·일괄(확인 모달)·임계값(미연결 시간)·기준 안내 배너 / 유형 3종(POWER_CUT 제거) |
 | 관리자 · 대시보드 | 🚧 보류 | 명세 확정 대기 |
 | 사용자 페이지 전체 | 🚧 미착수 | 관리자가 만든 실데이터 위에서 구현 예정 |
 
@@ -103,30 +103,31 @@ NestJS 백엔드(AWS staging)와 **실연동**하며, 백엔드에 아직 없는
 | 기기 등록 / 목록 / 상세 / 삭제 | `POST /devices`·`/devices/bulk` · `GET /devices`·`/devices/:mac` · `DELETE /devices/:id` |
 | 기기 별칭(alias) | `PATCH /devices/:mac { alias }` (unique, 중복 시 409) — 관리자+소속 사용자 가능 |
 | 기기 존 배정 | `PUT /devices/:id/zone/:zoneId` (경로 파라미터, body 없음, ADMIN) |
-| 기기 상태 이력 | `GET /devices/:mac/status?page=&limit=` |
-| 기기 **실값 필드** | MAC · 별칭(`alias`) · 소속 존 · **온도(`last_temperature`)** · **동작(`last_gpio_state`)** · `last_seen_at` · 등록일 |
-| 펌웨어 | `POST /firmware`(업로드·409) · `GET /firmware`(목록) · `POST /firmware/:id/send/:mac`(개별 전송) |
+| 기기 상태 이력 / 에러 로그 | `GET /devices/:mac/status` · `GET /devices/:mac/errors` |
+| 기기 **실값 필드** | MAC · 별칭(`alias`) · 소속 존 · **연결/동작(`connection_status`)** · **과열(`last_gpio_state`)** · **WiFi(`wifi_signal`)** · `firmware_version` · `last_seen_at` · 등록일 |
+| 펌웨어 | `POST /firmware`(업로드·설명·409) · `GET /firmware` · `POST /firmware/:id/send/:mac`(ONLINE만) · SSE `/firmware/:mac/update-progress` · `/firmware/:mac/sessions` |
+| 알림센터 | `GET /alerts`(통계 내장) · `PATCH /alerts/:id` · `GET·PATCH /alerts/settings/thresholds`(미연결 시간) |
 
 ### 🟡 목 (MOCK) — 백엔드에 없어 MSW로 흉내
 
 | 항목 | 이유 / 처리 |
 |------|------------|
-| 기기 **전원(power)·네트워크(network)·볼륨(volume)** | StatusReport 미확장 → MSW가 기기 응답에 병합 |
-| 기기별 **펌웨어 버전** | 엔티티에 저장 안 됨 → 목 병합 |
 | 텔레코일존 **주소·대표번호** | Zone 엔티티에 필드 없음 |
-| 담당자 **이메일(managerEmail)** | `zone.user`에 email 없음 → 목 (또는 `GET /users/:id` 보강) |
+| 담당자 **이메일(managerEmail)** | `zone.user`에 email 없음 → `GET /users/:id` 보강 |
 | 존+계정 **통합 생성** | 단일 엔드포인트 없음 → FE 오케스트레이션(`POST /zones` → `POST /users`) |
 | 기기 **배정 해제** | 해제 엔드포인트 없음(`:zoneId` 필수) → 세션 오버라이드 목 |
-| **정상 가동 수·가동률·존 상태** | MQTT heartbeat/`connection_status` 없음 → 목 기준 |
-| 펌웨어 **설명(description)·전체 전송(broadcast)** | 엔티티/엔드포인트 없음 |
-| **알림센터** 전체 | 백엔드 알림(Alert) 모듈 자체가 없음 |
+| 펌웨어 **전체 전송(broadcast)** | 엔드포인트 없음 (개별 전송만) |
 | 담당자 **부서(department)** | User 엔티티에 필드 없음 |
+| `wifi_rssi_dbm` 원시값 | 신호 단계 디버깅용 **임시 표시** — 검증 후 제거 |
+
+> **실값 전환됨(과거 목)**: 전원·동작·연결(`connection_status`)·Wi-Fi(`wifi_signal`)·과열(`last_gpio_state`)·펌웨어버전·알림센터·펌웨어 설명·정상가동/가동률(`ONLINE` 집계). **제거**: 볼륨·온도(℃)·`is_connected`.
 
 ### 🔵 파생 (DERIVED) — 실값으로 프론트가 계산
 
 | 항목 | 규칙 |
 |------|------|
-| 상태 뱃지 `normal/warning/offline` | `last_seen_at`(기본 5분 임계값) + 온도 임계값으로 파생 — 백엔드 `status`(PENDING/ACTIVE)와 무관 |
+| 상태 뱃지 `normal/warning/offline` | `connection_status`(offline=OFFLINE) + `last_gpio_state`(warning=과열)로 파생 — 백엔드 `status`(PENDING/ACTIVE)와 무관 |
+| 전원·동작·정상가동 | 전원=`connection_status!==OFFLINE`, 동작=3-state, **정상가동/가동률=`connection_status==='ONLINE'` 카운트** |
 | KPI / 가동률 집계 | `GET /devices`·`GET /zones` 결과를 프론트에서 집계 |
 
 > 화면에서 목 값 옆에는 **'목' 배지**를 달아 실값과 구분합니다. 실값(온도·동작·별칭)에는 배지가 없습니다.

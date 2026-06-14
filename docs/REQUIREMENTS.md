@@ -49,11 +49,11 @@
 2. **전체 히어링루프 리스트**
     - 개별 히어링루프 상세보기
         - **개별 히어링루프 상태 정보 보기**
-            - **전원상태**
-            - **기기 동작 여부**
-            - 온도 (제어 x)
-            - 볼륨 (제어 x)
-            - **네트워크 정상 연결**
+            - **전원 상태** (is_connected = connection_status !== OFFLINE)
+            - **기기 동작 여부** (connection_status: ONLINE 정상작동 / CONNECTING 준비중 / OFFLINE 작동중지)
+            - **과열 경보** (last_gpio_state: 정상/과열) — ※ 온도값은 센서 없어 미표시
+            - **WiFi 신호 강도** (wifi_signal: 강함/보통/약함/끊김)
+            - ~~볼륨~~ 제거 (백엔드 신호 없음)
         - **개별 히어링루프 상세 정보 보기**
             - 펌웨어 버전
             - 배치된 텔레코일 존
@@ -82,11 +82,12 @@
 ## 알림센터
 - KPI 카드 (전체 알림, 처리 대기, 긴급 알림, 오늘 발생)
 - 처리 상태 탭 : 처리 대기 / 사용자에게 전달됨 / 관리자 종결 / 전체
-- 유형 필터 (온도 이상, 전원 차단, 볼륨 이상, 연결 끊김, 펌웨어 업데이트 필요)
+- 유형 필터 (온도 이상[과열], 연결 끊김, 펌웨어 업데이트 필요) — ※ 전원 차단·볼륨 이상 제거
 - 우선순위 필터 (긴급, 경고, 정보)
+- **알림 발생 기준 안내 배너** (접이식 — 어떤 경우 알림이 발생하는지)
 - 알림 상세 모달 (사용자에게 전달 / 무시·종결)
-- 일괄 전달 및 일괄 종결
-- 알림 설정 (온도·볼륨 임계값, 알림 그룹핑, 자동 에스컬레이션 시간)
+- 일괄 전달 및 일괄 종결 (**확인 모달** 후 실행)
+- 알림 설정 (**미연결 임계값[시간]만** — 온도 임계값은 과열 GPIO 기반 전환으로 제거)
 
 # 사용자
 
@@ -107,10 +108,10 @@
 
 - 상태 KPI 카드 (전체, 정상, 경고, 오류/오프라인)
 - 별칭, MAC 주소 검색
-- 기기 카드 목록 (전원·네트워크·동작 상태 표시)
+- 기기 카드 목록 (전원·동작·WiFi 신호·과열 상태 표시)
 - 기기 상세 모달
   - 별칭 편집
-  - 전원·네트워크·기기 동작 상태 조회
+  - 전원·WiFi 신호·기기 동작(connection_status)·과열 경보 조회
   - 텔레코일존·MAC·등록일·최종 업데이트 정보
 
 ## 정보관리
@@ -174,9 +175,8 @@
 ### 결정된 항목 (질문 답변)
 1. **텔레코일존 필터 추가** — 상태 필터 옆에 존 선택 드롭다운 필터 추가(CLAUDE.md §11 일치).
 2. **기기 등록 = 단건 + bulk** — MAC 단건(`POST /devices`) + 여러 개 한 번에(`POST /devices/bulk`, created/skipped 반환) 둘 다 지원.
-3. **상세 모달 "알림 이력" = 목 유지** — 기기별 최근 알림 목록을 MSW 목으로 채워 표시(알림센터 자체는 5단계).
-4. **목 값 = '목' 배지 표시** — 전원·네트워크·볼륨·펌웨어버전은 목이므로 값 옆에 **'목' 배지**를 달아 구분. 온도·동작은 실값(`last_temperature`/`last_gpio_state`)이라 배지 없음.
-   - ⚠️ **TODO**: StatusReport 확장 배포 시 **MSW 핸들러 + '목' 배지 둘 다 제거** (CLAUDE.md §13에 기록).
+3. **상세 모달 기기 이력 = 실연동** — 알림/상태/업데이트/에러 탭(`/alerts`, `/devices/:mac/status`, `/firmware/:mac/sessions`, `/devices/:mac/errors`).
+4. ~~목 값 '목' 배지~~ → **실값 전환 완료.** 전원·동작·연결=`connection_status`, Wi-Fi=`wifi_signal`, 과열=`last_gpio_state`, 펌웨어=`firmware_version` 모두 실값('목' 배지 제거). **볼륨·온도는 표시 제거.**
 
 ### 데이터 출처 (Swagger 실스펙 대조 — 2026-06-04 보정)
 
@@ -188,19 +188,16 @@
 - (이 페이지 미사용) 상태이력 `GET /devices/:mac/status`, 존배정 **`PUT /devices/:id/zone/:zoneId`**(경로 파라미터, body 없음 — 실연동)
 
 **`DeviceResponseDto`에서 바로 쓰는 실값 (REAL, 배지 없음)**
-- `mac_address`, `alias`(nullable·unique), `zone`/`zone_id`(존 이름까지 옴), `last_temperature`(온도), `last_gpio_state`(동작), `registered_at`(등록일), `last_seen_at`(최근 업데이트), `id`(삭제·존배정 키)
+- `mac_address`, `alias`(nullable·unique), `zone`/`zone_id`, `last_gpio_state`(**과열 경보**, true=과열), `connection_status`(OFFLINE/CONNECTING/ONLINE = **전원·동작·연결**), `wifi_signal`(신호 강도), `firmware_version`, `registered_at`(등록일), `last_seen_at`(최근 업데이트), `id`(삭제·존배정 키)
+- `wifi_rssi_dbm` — **임시**(신호 단계 디버깅), 검증 후 제거. `last_temperature` — **무의미**(온도 센서 없음), 미표시.
 
-**🟡 응답 DTO에 필드가 없어 목으로 병합 (+'목' 배지)**
-- **전원(power)**, **네트워크(network)**, **볼륨(volume)**, **기기별 펌웨어 버전** — MSW로 device 응답에 필드 주입.
-  - ⚠️ **TODO**: StatusReport 확장 배포 시 **MSW 핸들러 + '목' 배지 둘 다 제거**(CLAUDE.md §13).
-
-**🟡 엔드포인트 자체가 없음 → 완전 목**
-- 상세 모달 **'알림 이력'** — 이 Swagger에 `/alerts*`가 전무(알림센터 = 5단계 목).
+**제거됨**
+- **볼륨(volume)** — 백엔드 신호 없음 → 표시 제외. `is_connected` — staging 응답에서 제거(connection_status로 대체, FE 파생).
 
 **🟢 파생 (API 필드 아님 — FE가 계산)**
-- 상태 뱃지 `normal/warning/error/offline` = `last_seen_at`(실값) + 온도·볼륨 등 + **목 임계값**으로 FE가 환산.
-  - ⚠️ **백엔드 `status`(`PENDING`/`ACTIVE`)와 다름!** DTO의 `status`는 프로비저닝 상태(등록·연결 여부)일 뿐, 건강 뱃지가 아니다. **절대 그대로 색 뱃지에 쓰지 말 것.** 별도 파생 함수 필요.
-  - 임계값(기본 5분 등) 미확정 → 백엔드가 `connection_status` 내려주면 파생 로직 제거(BACKEND §3).
+- 전원 = `connection_status !== OFFLINE`. 동작 = connection_status 3-state. 정상가동/가동률 = `connection_status === 'ONLINE'` 카운트.
+- 상태 뱃지 `normal/warning/error/offline` = `connection_status`(offline=OFFLINE) + `last_gpio_state`(warning=과열)로 FE 환산. (error는 `GET /devices/:mac/errors` 연동 시)
+  - ⚠️ **백엔드 `status`(`PENDING`/`ACTIVE`)와 다름!** 프로비저닝 상태일 뿐 건강 뱃지 아님. 별도 파생 함수 사용.
 
 ### ✅ 존 배정 엔드포인트 (2026-06-04 백엔드 코드 확인 — 정정)
 - 실제 엔드포인트는 **`PUT /devices/:id/zone/:zoneId`** (zoneId가 **경로 파라미터**, body 없음, ADMIN). **실연동(목 아님).** 이전의 "requestBody 미명세" 의심은 해소됨 — 라우트 자체가 path param 방식이라 400은 잘못된 호출(PATCH+body) 때문이었음.

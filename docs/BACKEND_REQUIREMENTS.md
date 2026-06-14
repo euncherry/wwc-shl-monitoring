@@ -44,11 +44,11 @@
 - `DeviceWhitelist` 최신값 컬럼 추가: `last_power`, `last_operating`, `last_network_connected`, `last_volume`
 - `GET /devices`, `GET /devices/:mac`, `GET /devices/:mac/status` 응답에 포함
 
-**현재 프론트 우회**: `gpio_state`→동작 상태로 사용, `last_seen_at`으로 online 파생, `power/network/volume`은 목 값.
+**✅ 반영됨(2026-06-15)**: `connection_status`(OFFLINE/CONNECTING/ONLINE)로 전원·동작·연결 실값 제공, `wifi_signal`로 Wi-Fi 신호 강도 제공. `gpio_state`는 **동작이 아니라 과열(Over Temperature) 경보**로 확정(온도 센서 없음). **볼륨은 신호 없어 표시 제거.** (`operating`/`power`/`network`/`volume` 별도 컬럼 요청은 폐기 — connection_status로 대체)
 
 ---
 
-## 2. 기기별 펌웨어 버전 저장 🟡
+## 2. 기기별 펌웨어 버전 저장 ✅ (반영 완료 — `firmware_version` 응답 제공)
 
 기기 상세 화면의 "펌웨어 버전"을 표시해야 하는데, 현재 기기 엔티티에 펌웨어 버전이 저장되지 않는다(HelloRequest로 수신만 함).
 
@@ -59,7 +59,7 @@
 
 ---
 
-## 3. 기기 연결 상태(online/offline) 산출 🟢
+## 3. 기기 연결 상태(online/offline) 산출 ✅ (반영 완료 — `connection_status` IoT Core lifecycle 기반)
 
 프론트 상태 분류(`normal/warning/error/offline`)에 online 판정이 필요하다.
 
