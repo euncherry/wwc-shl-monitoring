@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createElement, useEffect, useMemo, useState, type ReactNode } from 'react'
 import axios from 'axios'
 import {
   Search,
@@ -668,7 +668,7 @@ function DeviceDetailModal({
             <div className="rounded-xl border border-border p-4">
               <span className="text-[12px] text-muted-foreground block mb-2">기기 동작 여부</span>
               <div className="flex items-center gap-2">
-                <Activity className={`h-4 w-4 ${connectionMeta(device.connectionStatus).color}`} />
+                {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
                 <span className={`text-sm font-bold ${connectionMeta(device.connectionStatus).color}`}>{connectionMeta(device.connectionStatus).label}</span>
               </div>
             </div>
@@ -1247,10 +1247,10 @@ export default function HearingLoopsPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-center"><PowerIcon on={device.power} /></td>
-                      <td className="px-5 py-3.5 text-center">
-                        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-semibold ${connectionMeta(device.connectionStatus).color}`}>
-                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connectionMeta(device.connectionStatus).dot}`} />{connectionMeta(device.connectionStatus).short}
-                        </span>
+                      <td className="px-5 py-3.5 text-center" title={connectionMeta(device.connectionStatus).label}>
+                        <div className="flex justify-center">
+                          {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 text-center"><div className="flex justify-center"><WifiSignalIcon signal={device.wifiSignal} /></div></td>
                       <td className="px-5 py-3.5 text-center">
