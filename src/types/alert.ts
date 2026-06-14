@@ -7,7 +7,6 @@ export type AlertTypeEnum =
   | 'TEMPERATURE_ANOMALY'
   | 'CONNECTION_LOST'
   | 'FIRMWARE_UPDATE_AVAILABLE'
-  | 'POWER_CUT'
 export type AlertPriorityEnum = 'INFO' | 'WARNING' | 'CRITICAL'
 export type AlertStatusEnum = 'PENDING' | 'FORWARDED' | 'DISMISSED'
 
@@ -50,7 +49,6 @@ export const ALERT_TYPE_LABEL: Record<AlertTypeEnum, string> = {
   TEMPERATURE_ANOMALY: '온도 이상',
   CONNECTION_LOST: '연결 끊김',
   FIRMWARE_UPDATE_AVAILABLE: '펌웨어 업데이트 필요',
-  POWER_CUT: '전원 차단',
 }
 export const ALERT_PRIORITY_LABEL: Record<AlertPriorityEnum, string> = {
   INFO: '정보',
@@ -63,10 +61,12 @@ export const ALERT_STATUS_LABEL: Record<AlertStatusEnum, string> = {
   DISMISSED: '종결',
 }
 
-/** 알림 임계값 (AlertThresholdsDto, REAL — eeed421) */
+/**
+ * 알림 임계값 (AlertThresholdsDto, REAL).
+ * ⚠️ temp_threshold는 백엔드 7dcb3ff에서 제거됨 — 온도 알림이 하드웨어 과열(gpio) 기반으로 전환되어
+ * 온도 임계값 개념이 사라짐. 이제 미연결 임계값만 설정.
+ */
 export interface AlertThresholds {
-  /** 온도 임계값 °C (초과 시 알림) */
-  temp_threshold: number
-  /** 미연결 임계값 시간 (이상 미연결 시 알림) */
+  /** 미연결 임계값 시간 (이상 미연결 시 CONNECTION_LOST 알림) */
   connection_lost_hours: number
 }

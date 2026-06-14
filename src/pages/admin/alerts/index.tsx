@@ -4,7 +4,6 @@ import {
   Bell,
   BellOff,
   Thermometer,
-  Power,
   WifiOff,
   Shield,
   Building2,
@@ -74,12 +73,11 @@ const levelConfig: Record<LevelKey, { label: string; dot: string; bg: string; bo
 
 const TYPE_ICON: Record<AlertTypeEnum, typeof Thermometer> = {
   TEMPERATURE_ANOMALY: Thermometer,
-  POWER_CUT: Power,
   CONNECTION_LOST: WifiOff,
   FIRMWARE_UPDATE_AVAILABLE: Shield,
 }
 
-const TYPE_OPTIONS: AlertTypeEnum[] = ['TEMPERATURE_ANOMALY', 'POWER_CUT', 'CONNECTION_LOST', 'FIRMWARE_UPDATE_AVAILABLE']
+const TYPE_OPTIONS: AlertTypeEnum[] = ['TEMPERATURE_ANOMALY', 'CONNECTION_LOST', 'FIRMWARE_UPDATE_AVAILABLE']
 
 /* ══════════════════════════════════════════════════════
    Sub-components
@@ -220,24 +218,20 @@ function AlertDetailModal({
 function ThresholdsModal({ onClose }: { onClose: () => void }) {
   const { data, isLoading } = useAlertThresholds()
   const update = useUpdateThresholds()
-  const [temp, setTemp] = useState('')
   const [conn, setConn] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (data) {
-      setTemp(String(data.temp_threshold))
       setConn(String(data.connection_lost_hours))
     }
   }, [data])
 
   const save = () => {
     setError('')
-    const t = Number(temp)
     const c = Number(conn)
-    if (!Number.isInteger(t) || t < 1) { setError('온도 임계값은 1 이상의 정수여야 합니다.'); return }
     if (!Number.isInteger(c) || c < 1) { setError('미연결 시간은 1 이상의 정수여야 합니다.'); return }
-    update.mutate({ temp_threshold: t, connection_lost_hours: c }, {
+    update.mutate({ connection_lost_hours: c }, {
       onSuccess: onClose,
       onError: () => setError('임계값 저장에 실패했습니다.'),
     })
@@ -251,7 +245,7 @@ function ThresholdsModal({ onClose }: { onClose: () => void }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10"><Settings className="h-5 w-5 text-primary" /></div>
             <div>
               <h3 className="text-lg font-bold text-foreground">알림 설정</h3>
-              <p className="text-[12px] text-muted-foreground">온도·미연결 임계값 (자동 알림 발생 기준)</p>
+              <p className="text-[12px] text-muted-foreground">미연결 임계값 (자동 알림 발생 기준)</p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors"><X className="h-5 w-5" /></button>
@@ -261,13 +255,6 @@ function ThresholdsModal({ onClose }: { onClose: () => void }) {
           <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /><span className="text-[13px]">불러오는 중…</span></div>
         ) : (
           <div className="p-6 space-y-5">
-            <div className="rounded-xl border border-border p-4">
-              <label className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-foreground"><Thermometer className="h-4 w-4 text-destructive" />온도 임계값 (°C)</label>
-              <input type="number" min={1} value={temp} disabled={update.isPending}
-                onChange={(e) => setTemp(e.target.value)}
-                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
-              <p className="mt-1.5 text-[11px] text-muted-foreground">이 온도를 초과하면 '온도 이상' 알림이 발생합니다.</p>
-            </div>
             <div className="rounded-xl border border-border p-4">
               <label className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-foreground"><WifiOff className="h-4 w-4 text-primary" />미연결 임계값 (시간)</label>
               <input type="number" min={1} value={conn} disabled={update.isPending}
