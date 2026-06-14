@@ -22,6 +22,7 @@ import {
   Loader2,
   Info,
 } from 'lucide-react'
+import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
 import { alertsApi } from '@/api/alerts'
 import {
   alertKeys,
@@ -131,6 +132,7 @@ function AlertDetailModal({
   onDismiss: (id: number) => void
   pending: boolean
 }) {
+  useLockBodyScroll()
   const level = PRIORITY_TO_LEVEL[alert.priority]
   const c = levelConfig[level]
   const TypeIcon = TYPE_ICON[alert.type]
@@ -224,6 +226,7 @@ function AlertDetailModal({
 /* ── 알림 임계값 설정 모달 (REAL — 온도/미연결 시간) ── */
 
 function ThresholdsModal({ onClose }: { onClose: () => void }) {
+  useLockBodyScroll()
   const { data, isLoading } = useAlertThresholds()
   const update = useUpdateThresholds()
   const [conn, setConn] = useState('')
@@ -299,6 +302,7 @@ export default function AlertCenterPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [bulkConfirm, setBulkConfirm] = useState<'FORWARDED' | 'DISMISSED' | null>(null)
+  useLockBodyScroll(!!bulkConfirm)
   const [bulkRunning, setBulkRunning] = useState(false)
 
   const filters = {

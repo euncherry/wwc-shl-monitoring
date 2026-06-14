@@ -21,6 +21,7 @@ import { useDevices, useUpdateAlias } from '@/hooks/useDevices'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL, wifiSignalColor } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
+import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
 
 /* ══════════════════════════════════════════════════════
    사용자 기관 히어링루프 — GET /devices (ZONE_USER는 백엔드가 소속 존 자동 필터)
@@ -58,6 +59,7 @@ function DeviceDetailModal({
   device: HearingLoop
   onClose: () => void
 }) {
+  useLockBodyScroll()
   const updateAlias = useUpdateAlias()
   const hasAlias = !!device.alias?.trim()
   const [editingAlias, setEditingAlias] = useState(false)
