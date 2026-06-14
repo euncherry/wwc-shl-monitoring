@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import type { Firmware as FirmwareVM } from '@/types/firmware'
 import type { HearingLoop } from '@/types/device'
+import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
 import { useFirmwares, useUploadFirmware } from '@/hooks/useFirmware'
 import { firmwareApi } from '@/api/firmware'
@@ -229,8 +230,16 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
     )
   }, [devices, search])
 
+  // 펌웨어 전송은 ONLINE 기기만 가능(백엔드 워밍업/오프라인 OTA 차단 — 비-ONLINE이면 400)
+  const onlineMacs = useMemo(
+    () => candidates.filter((d) => d.connectionStatus === 'ONLINE').map((d) => d.mac),
+    [candidates],
+  )
+
   const toggle = (mac: string) => {
     if (sending || done) return
+    const d = candidates.find((c) => c.mac === mac)
+    if (d && d.connectionStatus !== 'ONLINE') return
     setSelected((prev) => {
       const next = new Set(prev)
       next.has(mac) ? next.delete(mac) : next.add(mac)
@@ -240,7 +249,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
   const toggleAll = () => {
     if (sending || done) return
     setSelected((prev) =>
-      prev.size === candidates.length ? new Set() : new Set(candidates.map((d) => d.mac)),
+      prev.size === onlineMacs.length && onlineMacs.length > 0 ? new Set() : new Set(onlineMacs),
     )
   }
 
@@ -265,10 +274,12 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
 
   const toggleGroup = (list: HearingLoop[]) => {
     if (sending || done) return
+    const sel = list.filter((d) => d.connectionStatus === 'ONLINE')
+    if (sel.length === 0) return
     setSelected((prev) => {
       const next = new Set(prev)
-      const all = list.every((d) => next.has(d.mac))
-      list.forEach((d) => (all ? next.delete(d.mac) : next.add(d.mac)))
+      const all = sel.every((d) => next.has(d.mac))
+      sel.forEach((d) => (all ? next.delete(d.mac) : next.add(d.mac)))
       return next
     })
   }
@@ -339,10 +350,14 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                   return { ...prev, [mac]: { ...curr, sessionId: resp.session_id } }
                 })
               })
-              .catch(() => {
+              .catch((err) => {
+                const raw = err?.response?.data?.message
+                const msg = typeof raw === 'string' && raw.includes('ONLINE')
+                  ? '기기가 온라인 상태가 아니어서 전송할 수 없습니다.'
+                  : (typeof raw === 'string' ? raw : '전송 요청 실패')
                 setProgress((prev) => ({
                   ...prev,
-                  [mac]: { phase: 'failed', self: null, target: null, errorMessage: '전송 요청 실패', sessionId: null },
+                  [mac]: { phase: 'failed', self: null, target: null, errorMessage: msg, sessionId: null },
                 }))
                 unsubscribe()
                 settle()
@@ -410,10 +425,10 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
             </div>
             <button
               onClick={toggleAll}
-              disabled={candidates.length === 0}
+              disabled={onlineMacs.length === 0}
               className="shrink-0 rounded-lg border border-border bg-white px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
             >
-              {selected.size === candidates.length && candidates.length > 0 ? '전체 해제' : '전체 선택'}
+              {selected.size === onlineMacs.length && onlineMacs.length > 0 ? '전체 해제' : '전체 선택'}
             </button>
           </div>
         )}
@@ -432,7 +447,8 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
           ) : (
             <div className="space-y-4">
               {groups.map((g) => {
-                const groupAll = g.list.every((d) => selected.has(d.mac))
+                const groupOnline = g.list.filter((d) => d.connectionStatus === 'ONLINE')
+                const groupAll = groupOnline.length > 0 && groupOnline.every((d) => selected.has(d.mac))
                 const groupSel = g.list.filter((d) => selected.has(d.mac)).length
                 // 전송 단계에서는 선택된 기기만 표시
                 const visibleList = inProgress ? g.list.filter((d) => selected.has(d.mac)) : g.list
@@ -530,17 +546,22 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                           )
                         }
 
-                        // 선택 단계: 기존 체크박스 카드
+                        // 선택 단계: 기존 체크박스 카드 (ONLINE 기기만 선택 가능)
+                        const online = d.connectionStatus === 'ONLINE'
                         return (
                           <button
                             key={d.id}
                             onClick={() => toggle(d.mac)}
+                            disabled={!online}
+                            title={online ? undefined : '기기가 온라인 상태가 아니어서 전송할 수 없습니다'}
                             className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
-                              checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/30 hover:bg-page/50'
+                              !online ? 'cursor-not-allowed border-border bg-page/40 opacity-60'
+                              : checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/30 hover:bg-page/50'
                             }`}
                           >
-                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${checked ? 'border-primary bg-primary text-white' : 'border-border bg-white'}`}>
-                              {checked && <CheckCircle2 className="h-3.5 w-3.5" />}
+                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${!online ? 'border-border bg-muted' : checked ? 'border-primary bg-primary text-white' : 'border-border bg-white'}`}>
+                              {online && checked && <CheckCircle2 className="h-3.5 w-3.5" />}
+                              {!online && <span className="text-[11px] text-muted-foreground">—</span>}
                             </span>
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                               <Radio className="h-4 w-4 text-primary" />
@@ -549,7 +570,11 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                               <p className="truncate text-[13px] font-bold text-foreground">{d.alias?.trim() ? d.alias : d.mac}</p>
                               {d.alias?.trim() && <p className="truncate font-mono text-[11px] text-muted-foreground">{d.mac}</p>}
                             </div>
-                            <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{d.firmwareVersion || '—'}</span>
+                            {online ? (
+                              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{d.firmwareVersion || '—'}</span>
+                            ) : (
+                              <span className={`shrink-0 text-[11px] font-semibold ${connectionMeta(d.connectionStatus).color}`}>{connectionMeta(d.connectionStatus).label}</span>
+                            )}
                           </button>
                         )
                       })}
