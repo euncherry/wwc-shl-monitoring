@@ -298,6 +298,7 @@ export default function AlertCenterPage() {
   const [showTypeFilter, setShowTypeFilter] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
+  const [bulkConfirm, setBulkConfirm] = useState<'FORWARDED' | 'DISMISSED' | null>(null)
   const [bulkRunning, setBulkRunning] = useState(false)
 
   const filters = {
@@ -566,8 +567,8 @@ export default function AlertCenterPage() {
           <div className="flex items-center gap-2">
             {activeTab === 'pending' && items.some((a) => a.status === 'PENDING') && (
               <>
-                <button onClick={() => bulk('DISMISSED')} disabled={bulkRunning} className="rounded-xl px-3.5 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">표시분 종결</button>
-                <button onClick={() => bulk('FORWARDED')} disabled={bulkRunning} className="flex items-center gap-1.5 rounded-xl bg-primary-dark px-3.5 py-2 text-[12px] font-bold text-white hover:bg-primary-dark/90 transition-colors disabled:opacity-50">{bulkRunning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}표시분 전달</button>
+                <button onClick={() => setBulkConfirm('DISMISSED')} disabled={bulkRunning} className="rounded-xl px-3.5 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">표시분 종결</button>
+                <button onClick={() => setBulkConfirm('FORWARDED')} disabled={bulkRunning} className="flex items-center gap-1.5 rounded-xl bg-primary-dark px-3.5 py-2 text-[12px] font-bold text-white hover:bg-primary-dark/90 transition-colors disabled:opacity-50">{bulkRunning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}표시분 전달</button>
               </>
             )}
             {listQuery.hasNextPage && (
@@ -590,6 +591,39 @@ export default function AlertCenterPage() {
       )}
 
       {showSettings && <ThresholdsModal onClose={() => setShowSettings(false)} />}
+
+      {/* 표시분 일괄 전달/종결 확인 모달 */}
+      {bulkConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { if (!bulkRunning) setBulkConfirm(null) }}>
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bulkConfirm === 'FORWARDED' ? 'bg-primary/10' : 'bg-muted'}`}>
+                  {bulkConfirm === 'FORWARDED' ? <Send className="h-5 w-5 text-primary" /> : <XCircle className="h-5 w-5 text-muted-foreground" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">{bulkConfirm === 'FORWARDED' ? '표시분 일괄 전달' : '표시분 일괄 종결'}</h3>
+                  <p className="text-[12px] text-muted-foreground">현재 표시된 처리 대기 알림을 한 번에 처리합니다.</p>
+                </div>
+              </div>
+              <p className="text-[13px] text-foreground">
+                처리 대기 <span className="font-bold">{items.filter((a) => a.status === 'PENDING').length}건</span>을 모두{' '}
+                {bulkConfirm === 'FORWARDED' ? '사용자에게 전달' : '종결'}하시겠습니까?
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-page/30">
+              <button onClick={() => setBulkConfirm(null)} disabled={bulkRunning} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">취소</button>
+              <button
+                onClick={async () => { const s = bulkConfirm; await bulk(s); setBulkConfirm(null) }}
+                disabled={bulkRunning}
+                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold text-white transition-colors disabled:opacity-50 ${bulkConfirm === 'FORWARDED' ? 'bg-primary-dark hover:bg-primary-dark/90' : 'bg-destructive hover:bg-destructive/90'}`}
+              >
+                {bulkRunning && <Loader2 className="h-4 w-4 animate-spin" />}{bulkConfirm === 'FORWARDED' ? '전달' : '종결'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
