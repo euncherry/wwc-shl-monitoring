@@ -1,5 +1,8 @@
 export type DeviceStatus = 'normal' | 'warning' | 'error' | 'offline'
 
+/** Wi-Fi 신호 강도 (RSSI 기반, REAL — 백엔드 3f1f93a). STRONG≥-55 / FAIR≥-67 / WEAK<-67 / DISCONNECTED=미수신·끊김 */
+export type WifiSignal = 'DISCONNECTED' | 'WEAK' | 'FAIR' | 'STRONG'
+
 export interface HearingLoop {
   id: string
   mac: string
@@ -9,6 +12,8 @@ export interface HearingLoop {
   /** 과열(Over Temperature) 경보. true=과열 감지, false=정상. ⚠️ 동작 여부 아님 — last_gpio_state 기반. */
   overTemperature: boolean
   networkConnected: boolean
+  /** Wi-Fi 신호 강도 (REAL — wifi_signal) */
+  wifiSignal: WifiSignal
   temperature: number
   volume: number
   firmwareVersion: string
@@ -59,6 +64,8 @@ export interface DeviceResponseDto {
   firmware_version: string | null
   /** 기기 연결 여부 (REAL — IoT Core lifecycle 이벤트 기반). 동작/가동 여부 판단의 신뢰 키. */
   is_connected: boolean
+  /** Wi-Fi 신호 강도 (REAL — 3f1f93a). RSSI ENUM. */
+  wifi_signal: WifiSignal
   zone: ZoneSummary | null
   created_at: string
 }

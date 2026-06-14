@@ -13,8 +13,6 @@ import {
   Bell,
   Power,
   PowerOff,
-  Wifi,
-  WifiOff,
   ArrowUpDown,
   Shield,
   UserPlus,
@@ -27,6 +25,7 @@ import {
   Info,
 } from 'lucide-react'
 import type { ZoneStatus, HearingLoop } from '@/types/device'
+import { WifiSignalIcon } from '@/components/WifiSignalIcon'
 import { formatDateTime } from '@/lib/format'
 import {
   useZones,
@@ -78,9 +77,6 @@ function ZoneStatusBadge({ status }: { status: ZoneStatus }) {
 
 function PowerIcon({ on }: { on: boolean }) {
   return on ? <Power className="h-3.5 w-3.5 text-success" /> : <PowerOff className="h-3.5 w-3.5 text-muted-foreground" />
-}
-function NetworkIcon({ connected }: { connected: boolean }) {
-  return connected ? <Wifi className="h-3.5 w-3.5 text-success" /> : <WifiOff className="h-3.5 w-3.5 text-destructive" />
 }
 
 /* ── 존 알림 이력 (GET /alerts?zone_id=) — 존 소속 기기 알림(REAL) ── */
@@ -604,7 +600,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                         </div>
                         <div className="grid grid-cols-4 gap-2">
                           <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><PowerIcon on={d.power} /><span className="text-[10px] text-muted-foreground">전원</span></div>
-                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><NetworkIcon connected={d.networkConnected} /><span className="text-[10px] text-muted-foreground">네트워크</span></div>
+                          <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><WifiSignalIcon signal={d.wifiSignal} className="h-3.5 w-3.5" /><span className="text-[10px] text-muted-foreground">WiFi</span></div>
                           <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><Thermometer className={`h-3.5 w-3.5 ${d.overTemperature ? 'text-destructive' : 'text-success'}`} /><span className={`text-[10px] font-bold ${d.overTemperature ? 'text-destructive' : 'text-muted-foreground'}`}>{d.overTemperature ? '과열' : '정상'}</span></div>
                           <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><Cpu className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-[9px] font-mono font-bold text-foreground">{d.firmwareVersion || '—'}</span><span className="text-[9px] text-muted-foreground">펌웨어</span></div>
                         </div>

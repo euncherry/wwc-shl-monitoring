@@ -3,8 +3,6 @@ import {
   Radio,
   Power,
   PowerOff,
-  Wifi,
-  WifiOff,
   Thermometer,
   Search,
   Pencil,
@@ -17,6 +15,7 @@ import {
 } from 'lucide-react'
 import { hearingLoops } from '@/data/hearingLoops'
 import type { HearingLoop, DeviceStatus } from '@/types/device'
+import { WifiSignalIcon, WIFI_SIGNAL_LABEL, wifiSignalColor } from '@/components/WifiSignalIcon'
 
 /* ══════════════════════════════════════════════════════
    사용자 기관 히어링루프 (서울시청 민원실 기준)
@@ -166,19 +165,13 @@ function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 네트워크 */}
+            {/* WiFi 신호 */}
             <div className="rounded-xl border border-border p-4 text-center">
-              <span className="text-[11px] text-muted-foreground block mb-2">네트워크</span>
+              <span className="text-[11px] text-muted-foreground block mb-2">WiFi 신호</span>
               <div className="flex items-center justify-center gap-2">
-                {device.networkConnected ? (
-                  <Wifi className="h-5 w-5 text-success" />
-                ) : (
-                  <WifiOff className="h-5 w-5 text-destructive" />
-                )}
-                <span
-                  className={`text-[14px] font-bold ${device.networkConnected ? 'text-success' : 'text-destructive'}`}
-                >
-                  {device.networkConnected ? '연결됨' : '끊김'}
+                <WifiSignalIcon signal={device.wifiSignal} className="h-5 w-5" />
+                <span className={`text-[14px] font-bold ${wifiSignalColor(device.wifiSignal)}`}>
+                  {WIFI_SIGNAL_LABEL[device.wifiSignal]}
                 </span>
               </div>
             </div>
@@ -397,14 +390,10 @@ export default function UserHearingLoops() {
                     <span className="text-[10px] text-muted-foreground">전원</span>
                   </div>
 
-                  {/* 네트워크 */}
+                  {/* WiFi 신호 */}
                   <div className="flex flex-col items-center gap-1">
-                    {device.networkConnected ? (
-                      <Wifi className="h-4 w-4 text-success" />
-                    ) : (
-                      <WifiOff className="h-4 w-4 text-destructive" />
-                    )}
-                    <span className="text-[10px] text-muted-foreground">네트워크</span>
+                    <WifiSignalIcon signal={device.wifiSignal} className="h-4 w-4" />
+                    <span className="text-[10px] text-muted-foreground">WiFi</span>
                   </div>
 
                   {/* 과열 경보 */}

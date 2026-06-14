@@ -3,7 +3,6 @@ import axios from 'axios'
 import {
   Search,
   Wifi,
-  WifiOff,
   Power,
   PowerOff,
   Thermometer,
@@ -33,6 +32,7 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import type { HearingLoop, DeviceStatusLogDto } from '@/types/device'
+import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { formatDateTime } from '@/lib/format'
 import {
   useDevices,
@@ -433,13 +433,6 @@ function PowerIcon({ on }: { on: boolean }) {
   )
 }
 
-function NetworkIcon({ connected }: { connected: boolean }) {
-  return connected ? (
-    <Wifi className="h-4 w-4 text-success" />
-  ) : (
-    <WifiOff className="h-4 w-4 text-destructive" />
-  )
-}
 
 /** 별칭 있으면 별칭, 없으면 MAC */
 function displayTitle(device: Pick<HearingLoop, 'alias' | 'mac'>) {
@@ -670,12 +663,12 @@ function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 네트워크 — 목 */}
+            {/* WiFi 신호 — 실값(wifi_signal) */}
             <div className="rounded-xl border border-border p-4">
-              <span className="text-[12px] text-muted-foreground block mb-2">네트워크 연결</span>
+              <span className="text-[12px] text-muted-foreground block mb-2">WiFi 신호</span>
               <div className="flex items-center gap-2">
-                <NetworkIcon connected={device.networkConnected} />
-                <span className="text-sm font-bold text-foreground">{device.networkConnected ? '연결됨' : '연결 끊김'}</span>
+                <WifiSignalIcon signal={device.wifiSignal} />
+                <span className="text-sm font-bold text-foreground">{WIFI_SIGNAL_LABEL[device.wifiSignal]}</span>
               </div>
             </div>
 
@@ -1177,7 +1170,7 @@ export default function HearingLoopsPage() {
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">기기</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">텔레코일존</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">네트워크</th>
+                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">과열</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">최근 업데이트</th>
@@ -1243,7 +1236,7 @@ export default function HearingLoopsPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-center"><PowerIcon on={device.power} /></td>
-                      <td className="px-5 py-3.5 text-center"><NetworkIcon connected={device.networkConnected} /></td>
+                      <td className="px-5 py-3.5 text-center"><div className="flex justify-center"><WifiSignalIcon signal={device.wifiSignal} /></div></td>
                       <td className="px-5 py-3.5 text-center">
                         <span className={`text-[13px] font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>
                           {device.overTemperature ? '과열' : '정상'}
