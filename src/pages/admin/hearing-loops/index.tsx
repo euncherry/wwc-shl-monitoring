@@ -7,7 +7,6 @@ import {
   Power,
   PowerOff,
   Thermometer,
-  Volume2,
   Shield,
   MapPin,
   ChevronRight,
@@ -426,15 +425,6 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   )
 }
 
-/** 목 값 표시용 배지 — StatusReport 확장 배포 시 핸들러와 함께 제거(§13) */
-function MockBadge() {
-  return (
-    <span className="ml-1 inline-block rounded bg-warning/10 px-1.5 py-0.5 text-[9px] font-bold text-warning align-middle">
-      목
-    </span>
-  )
-}
-
 function PowerIcon({ on }: { on: boolean }) {
   return on ? (
     <Power className="h-4 w-4 text-success" />
@@ -698,19 +688,6 @@ function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 볼륨 — 목, 조회만 */}
-            <div className="rounded-xl border border-border p-4 col-span-2">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[12px] text-muted-foreground">볼륨<MockBadge /></span>
-                <span className="text-sm font-bold text-primary">{device.volume}%</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Volume2 className="h-4 w-4 text-primary shrink-0" />
-                <div className="flex-1 h-2 rounded-full bg-border/50 overflow-hidden">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${device.volume}%` }} />
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Meta info */}
@@ -1202,7 +1179,6 @@ export default function HearingLoopsPage() {
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">네트워크</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">과열</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">볼륨<MockBadge /></th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">최근 업데이트</th>
                 <th className="px-5 py-3 w-12"></th>
@@ -1211,7 +1187,7 @@ export default function HearingLoopsPage() {
             <tbody className="divide-y divide-border/40">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Loader2 className="h-6 w-6 animate-spin" />
                       <p className="text-sm">기기 목록을 불러오는 중...</p>
@@ -1220,7 +1196,7 @@ export default function HearingLoopsPage() {
                 </tr>
               ) : isError ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <AlertCircle className="h-8 w-8 text-destructive/60" />
                       <p className="text-sm text-muted-foreground">목록을 불러오지 못했습니다.</p>
@@ -1232,7 +1208,7 @@ export default function HearingLoopsPage() {
                 </tr>
               ) : filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Radio className="h-8 w-8 text-muted-foreground/30" />
                       <p className="text-sm text-muted-foreground">검색 결과가 없습니다.</p>
@@ -1271,11 +1247,6 @@ export default function HearingLoopsPage() {
                       <td className="px-5 py-3.5 text-center">
                         <span className={`text-[13px] font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>
                           {device.overTemperature ? '과열' : '정상'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <span className={`text-[13px] font-semibold ${device.volume > 90 ? 'text-warning' : 'text-foreground'}`}>
-                          {device.volume > 0 ? `${device.volume}%` : '—'}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-center">
