@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { createElement, useState } from 'react'
+import axios from 'axios'
 import {
   Radio,
   Power,
@@ -11,17 +12,24 @@ import {
   ChevronRight,
   CheckCircle,
   AlertTriangle,
+  AlertCircle,
   XCircle,
+  Loader2,
 } from 'lucide-react'
-import { hearingLoops } from '@/data/hearingLoops'
 import type { HearingLoop, DeviceStatus } from '@/types/device'
+import { useDevices, useUpdateAlias } from '@/hooks/useDevices'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL, wifiSignalColor } from '@/components/WifiSignalIcon'
+import { connectionMeta } from '@/lib/connectionStatus'
+import { formatDateTime } from '@/lib/format'
 
 /* ══════════════════════════════════════════════════════
-   사용자 기관 히어링루프 (서울시청 민원실 기준)
+   사용자 기관 히어링루프 — GET /devices (ZONE_USER는 백엔드가 소속 존 자동 필터)
    ══════════════════════════════════════════════════════ */
 
-const MY_INSTITUTION = '서울시청'
+/** 별칭 있으면 별칭, 없으면 MAC */
+function displayTitle(device: Pick<HearingLoop, 'alias' | 'mac'>) {
+  return device.alias?.trim() ? device.alias : device.mac
+}
 
 /* ── Sub-components ── */
 
@@ -45,26 +53,39 @@ function StatusBadge({ status }: { status: DeviceStatus }) {
 
 function DeviceDetailModal({
   device,
-  nickname,
   onClose,
-  onSaveNickname,
 }: {
   device: HearingLoop
-  nickname: string
   onClose: () => void
-  onSaveNickname: (id: string, name: string) => void
 }) {
-  const [editingNickname, setEditingNickname] = useState(false)
-  const [tempNickname, setTempNickname] = useState(nickname)
+  const updateAlias = useUpdateAlias()
+  const hasAlias = !!device.alias?.trim()
+  const [editingAlias, setEditingAlias] = useState(false)
+  const [tempAlias, setTempAlias] = useState(device.alias ?? '')
+  const [aliasError, setAliasError] = useState('')
 
   const handleSave = () => {
-    onSaveNickname(device.id, tempNickname.trim())
-    setEditingNickname(false)
+    const next = tempAlias.trim()
+    setAliasError('')
+    updateAlias.mutate(
+      { mac: device.mac, alias: next },
+      {
+        onSuccess: () => setEditingAlias(false),
+        onError: (err) => {
+          if (axios.isAxiosError(err) && err.response?.status === 409) {
+            setAliasError('이미 사용 중인 별칭입니다.')
+          } else {
+            setAliasError('별칭 저장에 실패했습니다.')
+          }
+        },
+      },
+    )
   }
 
   const handleCancel = () => {
-    setTempNickname(nickname)
-    setEditingNickname(false)
+    setTempAlias(device.alias ?? '')
+    setAliasError('')
+    setEditingAlias(false)
   }
 
   return (
@@ -83,8 +104,8 @@ function DeviceDetailModal({
               <Radio className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-foreground">{device.id}</h3>
-              <p className="text-[12px] text-muted-foreground font-mono">{device.mac}</p>
+              <h3 className="text-lg font-bold text-foreground">{displayTitle(device)}</h3>
+              {hasAlias && <p className="text-[12px] text-muted-foreground font-mono">{device.mac}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -104,9 +125,9 @@ function DeviceDetailModal({
           <div className="rounded-xl border border-primary/20 bg-primary/3 p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[12px] font-semibold text-primary">히어링루프 별칭</span>
-              {!editingNickname && (
+              {!editingAlias && (
                 <button
-                  onClick={() => setEditingNickname(true)}
+                  onClick={() => setEditingAlias(true)}
                   className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-dark transition-colors"
                 >
                   <Pencil className="h-3 w-3" />
@@ -114,42 +135,52 @@ function DeviceDetailModal({
                 </button>
               )}
             </div>
-            {editingNickname ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={tempNickname}
-                  onChange={(e) => setTempNickname(e.target.value)}
-                  placeholder="별칭을 입력하세요 (예: 1층 안내데스크)"
-                  className="flex-1 rounded-lg border border-primary/30 bg-white px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSave()
-                    if (e.key === 'Escape') handleCancel()
-                  }}
-                />
-                <button
-                  onClick={handleSave}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+            {editingAlias ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={tempAlias}
+                    disabled={updateAlias.isPending}
+                    onChange={(e) => setTempAlias(e.target.value)}
+                    placeholder="별칭을 입력하세요 (예: 1층 안내데스크)"
+                    className="flex-1 rounded-lg border border-primary/30 bg-white px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSave()
+                      if (e.key === 'Escape') handleCancel()
+                    }}
+                  />
+                  <button
+                    onClick={handleSave}
+                    disabled={updateAlias.isPending}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
+                  >
+                    {updateAlias.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    disabled={updateAlias.isPending}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page transition-colors disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                {aliasError && (
+                  <p className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-destructive">
+                    <AlertCircle className="h-3 w-3" /> {aliasError}
+                  </p>
+                )}
+              </>
             ) : (
               <p className="text-[14px] font-bold text-foreground">
-                {nickname || <span className="text-muted-foreground font-normal italic">별칭 미지정</span>}
+                {hasAlias ? device.alias : <span className="text-muted-foreground font-normal italic">별칭 미지정</span>}
               </p>
             )}
           </div>
 
           {/* 실시간 상태 그리드 */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {/* 전원 상태 */}
             <div className="rounded-xl border border-border p-4 text-center">
               <span className="text-[11px] text-muted-foreground block mb-2">전원 상태</span>
@@ -161,6 +192,17 @@ function DeviceDetailModal({
                 )}
                 <span className={`text-[14px] font-bold ${device.power ? 'text-success' : 'text-muted-foreground'}`}>
                   {device.power ? 'ON' : 'OFF'}
+                </span>
+              </div>
+            </div>
+
+            {/* 기기 동작 — connection_status */}
+            <div className="rounded-xl border border-border p-4 text-center">
+              <span className="text-[11px] text-muted-foreground block mb-2">기기 동작</span>
+              <div className="flex items-center justify-center gap-2">
+                {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-5 w-5 ${connectionMeta(device.connectionStatus).color}` })}
+                <span className={`text-[14px] font-bold ${connectionMeta(device.connectionStatus).color}`}>
+                  {connectionMeta(device.connectionStatus).label}
                 </span>
               </div>
             </div>
@@ -197,8 +239,8 @@ function DeviceDetailModal({
             {[
               { label: '텔레코일존', value: device.telecoilZoneName ?? '—' },
               { label: 'MAC 주소', value: device.mac },
-              { label: '최근 업데이트', value: device.lastUpdated },
-              { label: '등록일', value: device.registeredAt },
+              { label: '최근 업데이트', value: formatDateTime(device.lastUpdated) },
+              { label: '등록일', value: formatDateTime(device.registeredAt) },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between px-4 py-3">
                 <span className="text-[13px] text-muted-foreground">{row.label}</span>
@@ -229,37 +271,23 @@ function DeviceDetailModal({
 export default function UserHearingLoops() {
   const [search, setSearch] = useState('')
   const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
-  const [nicknames, setNicknames] = useState<Record<string, string>>(() => ({
-    'HL-0001': '1층 민원 안내데스크',
-    'HL-0002': '2층 민원 상담실',
-    'HL-0003': '3층 대회의실',
-  }))
 
-  /* 우리 기관 기기만 필터 */
-  const myDevices = hearingLoops.filter((d) => d.telecoilZoneName === MY_INSTITUTION)
+  /* 소속 기관 기기 (ZONE_USER는 GET /devices가 자동 필터) */
+  const { data: devices = [], isLoading, isError } = useDevices()
 
-  /* 검색 필터 */
-  const filteredDevices = myDevices.filter((d) => {
+  /* 검색 필터 (별칭·MAC) */
+  const filteredDevices = devices.filter((d) => {
     if (!search.trim()) return true
     const q = search.toLowerCase()
-    return (
-      d.id.toLowerCase().includes(q) ||
-      d.mac.toLowerCase().includes(q) ||
-      (nicknames[d.id] ?? '').toLowerCase().includes(q) ||
-      (d.telecoilZoneName ?? '').toLowerCase().includes(q)
-    )
+    return d.mac.toLowerCase().includes(q) || (d.alias ?? '').toLowerCase().includes(q)
   })
 
   /* 상태 통계 */
   const stats = {
-    total: myDevices.length,
-    normal: myDevices.filter((d) => d.status === 'normal').length,
-    warning: myDevices.filter((d) => d.status === 'warning').length,
-    error: myDevices.filter((d) => d.status === 'error' || d.status === 'offline').length,
-  }
-
-  const handleSaveNickname = (id: string, name: string) => {
-    setNicknames((prev) => ({ ...prev, [id]: name }))
+    total: devices.length,
+    normal: devices.filter((d) => d.status === 'normal').length,
+    warning: devices.filter((d) => d.status === 'warning').length,
+    error: devices.filter((d) => d.status === 'error' || d.status === 'offline').length,
   }
 
   return (
@@ -321,7 +349,7 @@ export default function UserHearingLoops() {
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
           type="text"
-          placeholder="기기 ID, 별칭, MAC 주소로 검색..."
+          placeholder="별칭, MAC 주소로 검색..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-4 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
@@ -330,89 +358,104 @@ export default function UserHearingLoops() {
 
       {/* ─── 기기 카드 목록 ─── */}
       <div className="space-y-3">
-        {filteredDevices.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center gap-3 py-20 rounded-2xl border border-dashed border-border bg-white">
+            <Loader2 className="h-8 w-8 text-muted-foreground/40 animate-spin" />
+            <p className="text-[14px] font-semibold text-muted-foreground">불러오는 중…</p>
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center gap-3 py-20 rounded-2xl border border-dashed border-destructive/30 bg-white">
+            <AlertCircle className="h-10 w-10 text-destructive/40" />
+            <p className="text-[14px] font-semibold text-destructive">기기 목록을 불러오지 못했습니다</p>
+          </div>
+        ) : devices.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-20 rounded-2xl border border-dashed border-border bg-white">
+            <Radio className="h-10 w-10 text-muted-foreground/20" />
+            <p className="text-[14px] font-semibold text-muted-foreground">소속 기관에 등록된 히어링루프가 없습니다</p>
+          </div>
+        ) : filteredDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-20 rounded-2xl border border-dashed border-border bg-white">
             <Radio className="h-10 w-10 text-muted-foreground/20" />
             <p className="text-[14px] font-semibold text-muted-foreground">검색 결과가 없습니다</p>
           </div>
         ) : (
-          filteredDevices.map((device) => {
-            const nick = nicknames[device.id] || device.id
-            return (
+          filteredDevices.map((device) => (
+            <div
+              key={device.id}
+              onClick={() => setSelectedDevice(device)}
+              className="group flex items-center gap-5 rounded-2xl border border-border bg-white p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
+            >
+              {/* 아이콘 */}
               <div
-                key={device.id}
-                onClick={() => setSelectedDevice(device)}
-                className="group flex items-center gap-5 rounded-2xl border border-border bg-white p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
+                className={`flex h-12 w-12 items-center justify-center rounded-xl shrink-0 ${
+                  device.status === 'normal'
+                    ? 'bg-success/10'
+                    : device.status === 'warning'
+                      ? 'bg-warning/10'
+                      : 'bg-destructive/10'
+                }`}
               >
-                {/* 아이콘 */}
-                <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-xl shrink-0 ${
+                <Radio
+                  className={`h-6 w-6 ${
                     device.status === 'normal'
-                      ? 'bg-success/10'
+                      ? 'text-success'
                       : device.status === 'warning'
-                        ? 'bg-warning/10'
-                        : 'bg-destructive/10'
+                        ? 'text-warning'
+                        : 'text-destructive'
                   }`}
-                >
-                  <Radio
-                    className={`h-6 w-6 ${
-                      device.status === 'normal'
-                        ? 'text-success'
-                        : device.status === 'warning'
-                          ? 'text-warning'
-                          : 'text-destructive'
-                    }`}
+                />
+              </div>
+
+              {/* 기기 정보 */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-[15px] font-bold text-foreground">{displayTitle(device)}</p>
+                </div>
+                <p className="text-[12px] text-muted-foreground">
+                  {device.telecoilZoneName ?? '—'} · <span className="font-mono">{device.mac}</span>
+                </p>
+              </div>
+
+              {/* 실시간 상태 인디케이터 */}
+              <div className="flex items-center gap-5 shrink-0">
+                {/* 전원 */}
+                <div className="flex flex-col items-center gap-1">
+                  {device.power ? (
+                    <Power className="h-4 w-4 text-success" />
+                  ) : (
+                    <PowerOff className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="text-[10px] text-muted-foreground">전원</span>
+                </div>
+
+                {/* 동작 */}
+                <div className="flex flex-col items-center gap-1">
+                  {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
+                  <span className="text-[10px] text-muted-foreground">동작</span>
+                </div>
+
+                {/* WiFi 신호 */}
+                <div className="flex flex-col items-center gap-1">
+                  <WifiSignalIcon signal={device.wifiSignal} className="h-4 w-4" />
+                  <span className="text-[10px] text-muted-foreground">WiFi</span>
+                </div>
+
+                {/* 과열 경보 */}
+                <div className="flex flex-col items-center gap-1">
+                  <Thermometer
+                    className={`h-4 w-4 ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
                   />
-                </div>
-
-                {/* 기기 정보 */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-[15px] font-bold text-foreground">{nick}</p>
-                    <span className="rounded-md bg-page px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                      {device.id}
-                    </span>
-                  </div>
-                  <p className="text-[12px] text-muted-foreground">
-                    {device.telecoilZoneName ?? '—'} · <span className="font-mono">{device.mac}</span>
-                  </p>
-                </div>
-
-                {/* 실시간 상태 인디케이터 */}
-                <div className="flex items-center gap-5 shrink-0">
-                  {/* 전원 */}
-                  <div className="flex flex-col items-center gap-1">
-                    {device.power ? (
-                      <Power className="h-4 w-4 text-success" />
-                    ) : (
-                      <PowerOff className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className="text-[10px] text-muted-foreground">전원</span>
-                  </div>
-
-                  {/* WiFi 신호 */}
-                  <div className="flex flex-col items-center gap-1">
-                    <WifiSignalIcon signal={device.wifiSignal} className="h-4 w-4" />
-                    <span className="text-[10px] text-muted-foreground">WiFi</span>
-                  </div>
-
-                  {/* 과열 경보 */}
-                  <div className="flex flex-col items-center gap-1">
-                    <Thermometer
-                      className={`h-4 w-4 ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
-                    />
-                    <span className="text-[10px] text-muted-foreground">과열</span>
-                  </div>
-                </div>
-
-                {/* 상태 뱃지 + 화살표 */}
-                <div className="flex items-center gap-3 shrink-0">
-                  <StatusBadge status={device.status} />
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+                  <span className="text-[10px] text-muted-foreground">과열</span>
                 </div>
               </div>
-            )
-          })
+
+              {/* 상태 뱃지 + 화살표 */}
+              <div className="flex items-center gap-3 shrink-0">
+                <StatusBadge status={device.status} />
+                <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+              </div>
+            </div>
+          ))
         )}
       </div>
 
@@ -433,9 +476,7 @@ export default function UserHearingLoops() {
       {selectedDevice && (
         <DeviceDetailModal
           device={selectedDevice}
-          nickname={nicknames[selectedDevice.id] || selectedDevice.id}
           onClose={() => setSelectedDevice(null)}
-          onSaveNickname={handleSaveNickname}
         />
       )}
     </div>
