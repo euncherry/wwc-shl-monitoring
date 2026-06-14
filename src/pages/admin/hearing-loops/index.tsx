@@ -1180,6 +1180,7 @@ export default function HearingLoopsPage() {
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">기기</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">텔레코일존</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원</th>
+                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">동작</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">과열</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어</th>
@@ -1190,7 +1191,7 @@ export default function HearingLoopsPage() {
             <tbody className="divide-y divide-border/40">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={9} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Loader2 className="h-6 w-6 animate-spin" />
                       <p className="text-sm">기기 목록을 불러오는 중...</p>
@@ -1199,7 +1200,7 @@ export default function HearingLoopsPage() {
                 </tr>
               ) : isError ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={9} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <AlertCircle className="h-8 w-8 text-destructive/60" />
                       <p className="text-sm text-muted-foreground">목록을 불러오지 못했습니다.</p>
@@ -1211,7 +1212,7 @@ export default function HearingLoopsPage() {
                 </tr>
               ) : filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={9} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Radio className="h-8 w-8 text-muted-foreground/30" />
                       <p className="text-sm text-muted-foreground">검색 결과가 없습니다.</p>
@@ -1246,6 +1247,11 @@ export default function HearingLoopsPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-center"><PowerIcon on={device.power} /></td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-semibold ${connectionMeta(device.connectionStatus).color}`}>
+                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connectionMeta(device.connectionStatus).dot}`} />{connectionMeta(device.connectionStatus).short}
+                        </span>
+                      </td>
                       <td className="px-5 py-3.5 text-center"><div className="flex justify-center"><WifiSignalIcon signal={device.wifiSignal} /></div></td>
                       <td className="px-5 py-3.5 text-center">
                         <span className={`text-[13px] font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>
