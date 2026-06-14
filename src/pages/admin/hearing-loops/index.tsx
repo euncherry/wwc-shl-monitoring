@@ -89,11 +89,9 @@ function AlertRow({ a }: { a: AlertResponseDto }) {
 function StatusRow({ s }: { s: DeviceStatusLogDto }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-page/30 px-4 py-3 text-[12px]">
-      <Activity className={`h-3.5 w-3.5 shrink-0 ${s.gpio_state ? 'text-success' : 'text-muted-foreground'}`} />
-      <span className="shrink-0 font-semibold text-foreground">{s.gpio_state ? '작동' : '중지'}</span>
-      <span className="flex min-w-0 flex-1 items-center gap-1 text-muted-foreground">
-        <Thermometer className="h-3 w-3 shrink-0" />{s.temperature != null ? `${s.temperature}°C` : '—'}
-      </span>
+      <Thermometer className={`h-3.5 w-3.5 shrink-0 ${s.gpio_state ? 'text-destructive' : 'text-success'}`} />
+      <span className={`shrink-0 font-semibold ${s.gpio_state ? 'text-destructive' : 'text-foreground'}`}>{s.gpio_state ? '과열' : '정상'}</span>
+      <span className="min-w-0 flex-1 text-muted-foreground">과열 경보</span>
       <span className="shrink-0 text-muted-foreground">{formatDateTime(s.reported_at)}</span>
     </div>
   )
@@ -682,15 +680,6 @@ function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 기기 동작 — 실값 */}
-            <div className="rounded-xl border border-border p-4">
-              <span className="text-[12px] text-muted-foreground block mb-2">기기 동작 여부</span>
-              <div className="flex items-center gap-2">
-                <Activity className={`h-4 w-4 ${device.operating ? 'text-success' : 'text-destructive'}`} />
-                <span className="text-sm font-bold text-foreground">{device.operating ? '정상 작동' : '작동 중지'}</span>
-              </div>
-            </div>
-
             {/* 네트워크 — 목 */}
             <div className="rounded-xl border border-border p-4">
               <span className="text-[12px] text-muted-foreground block mb-2">네트워크 연결</span>
@@ -700,12 +689,12 @@ function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 온도 — 실값 */}
+            {/* 과열 경보 — 실값(last_gpio_state). true=과열 감지, false=정상. (온도 센서 없음 → 온도값 대신 과열 여부만 표시) */}
             <div className="rounded-xl border border-border p-4">
-              <span className="text-[12px] text-muted-foreground block mb-2">온도</span>
+              <span className="text-[12px] text-muted-foreground block mb-2">과열 경보</span>
               <div className="flex items-center gap-2">
-                <Thermometer className={`h-4 w-4 ${device.temperature > 45 ? 'text-destructive' : device.temperature > 40 ? 'text-warning' : 'text-success'}`} />
-                <span className="text-sm font-bold text-foreground">{device.temperature}°C</span>
+                <Thermometer className={`h-4 w-4 ${device.overTemperature ? 'text-destructive' : 'text-success'}`} />
+                <span className={`text-sm font-bold ${device.overTemperature ? 'text-destructive' : 'text-foreground'}`}>{device.overTemperature ? '과열 감지' : '정상'}</span>
               </div>
             </div>
 
@@ -1212,7 +1201,7 @@ export default function HearingLoopsPage() {
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">텔레코일존</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">네트워크</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">온도</th>
+                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">과열</th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">볼륨<MockBadge /></th>
                 <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">최근 업데이트</th>
@@ -1280,8 +1269,8 @@ export default function HearingLoopsPage() {
                       <td className="px-5 py-3.5 text-center"><PowerIcon on={device.power} /></td>
                       <td className="px-5 py-3.5 text-center"><NetworkIcon connected={device.networkConnected} /></td>
                       <td className="px-5 py-3.5 text-center">
-                        <span className={`text-[13px] font-semibold ${device.temperature > 45 ? 'text-destructive' : device.temperature > 40 ? 'text-warning' : 'text-foreground'}`}>
-                          {device.temperature > 0 ? `${device.temperature}°C` : '—'}
+                        <span className={`text-[13px] font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>
+                          {device.overTemperature ? '과열' : '정상'}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-center">

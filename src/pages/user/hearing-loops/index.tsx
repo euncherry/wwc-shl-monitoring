@@ -5,7 +5,7 @@ import {
   PowerOff,
   Wifi,
   WifiOff,
-  Activity,
+  Thermometer,
   Search,
   Pencil,
   Check,
@@ -183,17 +183,17 @@ function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 기기 동작 여부 */}
+            {/* 과열 경보 — last_gpio_state. true=과열, false=정상 */}
             <div className="rounded-xl border border-border p-4 text-center">
-              <span className="text-[11px] text-muted-foreground block mb-2">기기 동작</span>
+              <span className="text-[11px] text-muted-foreground block mb-2">과열 경보</span>
               <div className="flex items-center justify-center gap-2">
-                <Activity
-                  className={`h-5 w-5 ${device.operating ? 'text-success' : 'text-destructive'}`}
+                <Thermometer
+                  className={`h-5 w-5 ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
                 />
                 <span
-                  className={`text-[14px] font-bold ${device.operating ? 'text-success' : 'text-destructive'}`}
+                  className={`text-[14px] font-bold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
                 >
-                  {device.operating ? '정상' : '중지'}
+                  {device.overTemperature ? '과열' : '정상'}
                 </span>
               </div>
             </div>
@@ -407,12 +407,12 @@ export default function UserHearingLoops() {
                     <span className="text-[10px] text-muted-foreground">네트워크</span>
                   </div>
 
-                  {/* 기기 동작 */}
+                  {/* 과열 경보 */}
                   <div className="flex flex-col items-center gap-1">
-                    <Activity
-                      className={`h-4 w-4 ${device.operating ? 'text-success' : 'text-destructive'}`}
+                    <Thermometer
+                      className={`h-4 w-4 ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
                     />
-                    <span className="text-[10px] text-muted-foreground">동작</span>
+                    <span className="text-[10px] text-muted-foreground">과열</span>
                   </div>
                 </div>
 

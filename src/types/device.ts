@@ -6,7 +6,8 @@ export interface HearingLoop {
   /** 별칭(alias). 없으면 MAC이 메인 타이틀. (옛 mock 데이터엔 없을 수 있어 optional) */
   alias?: string | null
   power: boolean
-  operating: boolean
+  /** 과열(Over Temperature) 경보. true=과열 감지, false=정상. ⚠️ 동작 여부 아님 — last_gpio_state 기반. */
+  overTemperature: boolean
   networkConnected: boolean
   temperature: number
   volume: number
@@ -49,14 +50,14 @@ export interface DeviceResponseDto {
   alias: string | null
   status: ProvisionStatus
   registered_at: string | null
-  /** GPIO 상태 → 기기 동작 여부 (REAL) */
+  /** GPIO 상태 = 과열(Over Temperature) 경보 (REAL). true(1)=과열 감지, false(0)=정상. ⚠️ 동작/가동 여부 아님 — 온도 센서가 없어 실제 온도값은 못 내려오고, 과열 하드웨어 블럭 동작 여부만 판단. */
   last_gpio_state: boolean | null
-  /** 온도 °C (REAL) */
+  /** 온도 °C. ⚠️ 무의미 — 기기에 온도 센서 없음(고정/시드값). 고온 여부는 last_gpio_state(과열 경보)로 판단. */
   last_temperature: number | null
   last_seen_at: string | null
   /** ESP32 펌웨어 버전 (REAL — HelloRequest 수신 시 갱신) */
   firmware_version: string | null
-  /** 기기 연결 여부 (REAL — 최근 5분 이내 통신 시 true) */
+  /** 기기 연결 여부 (REAL — IoT Core lifecycle 이벤트 기반). 동작/가동 여부 판단의 신뢰 키. */
   is_connected: boolean
   zone: ZoneSummary | null
   created_at: string
@@ -95,9 +96,9 @@ export interface BulkCreateResult {
 export interface DeviceStatusLogDto {
   id: number
   mac_address: string
-  /** GPIO 상태(동작 ON/OFF) */
+  /** GPIO 상태 = 과열(Over Temperature) 경보. true=과열, false=정상. (동작 ON/OFF 아님) */
   gpio_state: boolean | null
-  /** 온도 °C */
+  /** 온도 °C — ⚠️ 무의미(센서 없음). 과열 여부는 gpio_state. */
   temperature: number | null
   /** 기기 보고 시각 */
   reported_at: string
