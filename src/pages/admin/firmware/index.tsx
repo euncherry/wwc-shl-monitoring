@@ -372,9 +372,10 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
 
   const inProgress = sending || done
 
+  // 오버레이에 onClick={onClose} 미지정 — 외부 클릭으로 닫히지 않음(전송 중 실수 방지). 닫기는 X·취소 버튼으로만
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border bg-page/50 px-6 py-5">
           <div className="flex items-center gap-3">
