@@ -24,6 +24,8 @@ export interface HearingLoop {
   networkConnected: boolean
   /** Wi-Fi 신호 강도 (REAL — wifi_signal) */
   wifiSignal: WifiSignal
+  /** ⚠️ 임시: Wi-Fi RSSI 원시값(dBm). 백엔드가 신호 단계 디버깅용으로 추가 — 검증 후 제거 예정 */
+  wifiRssi?: number | null
   temperature: number
   volume: number
   firmwareVersion: string
@@ -78,6 +80,8 @@ export interface DeviceResponseDto {
   connection_status: ConnectionStatus
   /** Wi-Fi 신호 강도 (REAL — 3f1f93a). RSSI ENUM. */
   wifi_signal: WifiSignal
+  /** ⚠️ 임시: Wi-Fi RSSI 원시값(dBm). 신호 단계 디버깅용 — 검증 후 제거 예정 */
+  wifi_rssi_dbm?: number | null
   zone: ZoneSummary | null
   created_at: string
 }

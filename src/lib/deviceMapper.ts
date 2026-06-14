@@ -37,6 +37,7 @@ export function toHearingLoop(dto: DeviceApiResponse): HearingLoop {
     overTemperature: dto.last_gpio_state ?? false,
     networkConnected: connected,
     wifiSignal: dto.wifi_signal ?? 'DISCONNECTED',
+    wifiRssi: dto.wifi_rssi_dbm ?? null,
     temperature: dto.last_temperature ?? 0,
     volume: dto.volume ?? 0,
     firmwareVersion: dto.firmware_version ?? '',

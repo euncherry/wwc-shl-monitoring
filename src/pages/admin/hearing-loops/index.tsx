@@ -1252,7 +1252,13 @@ export default function HearingLoopsPage() {
                           {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 text-center"><div className="flex justify-center"><WifiSignalIcon signal={device.wifiSignal} /></div></td>
+                      <td className="px-5 py-3.5 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <WifiSignalIcon signal={device.wifiSignal} />
+                          {/* 임시: RSSI 원시값(dBm) 표시 — 신호 단계 디버깅용 */}
+                          <span className="text-[10px] tabular-nums text-muted-foreground">{device.wifiRssi != null ? `${device.wifiRssi}dBm` : '—'}</span>
+                        </div>
+                      </td>
                       <td className="px-5 py-3.5 text-center">
                         <span className={`text-[13px] font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>
                           {device.overTemperature ? '과열' : '정상'}
