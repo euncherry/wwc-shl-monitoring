@@ -360,6 +360,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
   const [acct, setAcct] = useState({ username: '', email: '', password: '' })
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
+  const [unassignTarget, setUnassignTarget] = useState<HearingLoop | null>(null)
   const [actionError, setActionError] = useState('')
 
   const zone = data?.zone
@@ -596,7 +597,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                               {d.alias?.trim() && <p className="truncate font-mono text-[10px] text-muted-foreground">{d.mac}</p>}
                             </div>
                           </div>
-                          <button onClick={() => unassign.mutate(Number(d.id))} disabled={unassign.isPending} title="배정 해제" className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"><X className="h-4 w-4" /></button>
+                          <button onClick={() => { setActionError(''); setUnassignTarget(d) }} disabled={unassign.isPending} title="배정 해제" className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"><X className="h-4 w-4" /></button>
                         </div>
                         <div className="grid grid-cols-4 gap-2">
                           <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><PowerIcon on={d.power} /><span className="text-[10px] text-muted-foreground">전원</span></div>
@@ -639,6 +640,40 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
       </div>
 
       {showAssign && <AssignDeviceModal zoneId={zoneId} onClose={() => setShowAssign(false)} />}
+
+      {/* 기기 배정 해제 확인 모달 */}
+      {unassignTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { if (!unassign.isPending) setUnassignTarget(null) }}>
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10"><X className="h-5 w-5 text-destructive" /></div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">배정 해제 확인</h3>
+                  <p className="text-[12px] text-muted-foreground">이 기기를 텔레코일존에서 해제합니다.</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-page/40 px-4 py-3">
+                <p className="truncate text-[13px] font-bold text-foreground">{unassignTarget.alias?.trim() ? unassignTarget.alias : unassignTarget.mac}</p>
+                {unassignTarget.alias?.trim() && <p className="truncate font-mono text-[11px] text-muted-foreground">{unassignTarget.mac}</p>}
+              </div>
+              <p className="mt-3 text-[12px] text-muted-foreground">해제하면 이 기기는 <span className="font-semibold text-foreground">미배정</span> 상태가 됩니다. 정말 해제하시겠습니까?</p>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-page/30">
+              <button onClick={() => setUnassignTarget(null)} disabled={unassign.isPending} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">취소</button>
+              <button
+                onClick={() => unassign.mutate(Number(unassignTarget.id), {
+                  onSuccess: () => setUnassignTarget(null),
+                  onError: () => { setActionError('기기 배정 해제에 실패했습니다.'); setUnassignTarget(null) },
+                })}
+                disabled={unassign.isPending}
+                className="flex items-center gap-2 rounded-xl bg-destructive px-5 py-2.5 text-[13px] font-bold text-white hover:bg-destructive/90 transition-colors disabled:opacity-50">
+                {unassign.isPending && <Loader2 className="h-4 w-4 animate-spin" />}해제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
