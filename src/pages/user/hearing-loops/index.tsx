@@ -1,22 +1,24 @@
-import { createElement, useState } from 'react'
+import { createElement, useState, type ReactNode } from 'react'
 import axios from 'axios'
 import {
   Radio,
   Power,
   PowerOff,
   Thermometer,
+  Wifi,
+  WifiOff,
+  Building2,
   Search,
   Pencil,
   Check,
   X,
-  ChevronRight,
   CheckCircle,
   AlertTriangle,
   AlertCircle,
   XCircle,
   Loader2,
 } from 'lucide-react'
-import type { HearingLoop, DeviceStatus } from '@/types/device'
+import type { HearingLoop, DeviceStatus, ConnectionStatus, WifiSignal } from '@/types/device'
 import { useDevices, useUpdateAlias } from '@/hooks/useDevices'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL, wifiSignalColor } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
@@ -47,6 +49,37 @@ function StatusBadge({ status }: { status: DeviceStatus }) {
       <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
+  )
+}
+
+/* ── Status Chip (전원·동작·WiFi·과열) ── */
+
+type Tone = 'success' | 'warning' | 'destructive' | 'muted'
+
+const TONE: Record<Tone, string> = {
+  success: 'bg-success/10 text-success',
+  warning: 'bg-warning/10 text-warning',
+  destructive: 'bg-destructive/10 text-destructive',
+  muted: 'bg-muted text-muted-foreground',
+}
+
+function connTone(s: ConnectionStatus): Tone {
+  return s === 'ONLINE' ? 'success' : s === 'CONNECTING' ? 'warning' : 'muted'
+}
+
+function wifiTone(s: WifiSignal): Tone {
+  return s === 'STRONG' || s === 'FAIR' ? 'success' : s === 'WEAK' ? 'warning' : 'destructive'
+}
+
+function StatusChip({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: Tone }) {
+  return (
+    <div className={`flex items-center gap-2 rounded-lg px-2.5 py-2 ${TONE[tone]}`}>
+      <span className="shrink-0">{icon}</span>
+      <div className="min-w-0 leading-tight">
+        <p className="text-[10px] font-medium opacity-70">{label}</p>
+        <p className="text-[12px] font-bold truncate">{value}</p>
+      </div>
+    </div>
   )
 }
 
@@ -381,83 +414,85 @@ export default function UserHearingLoops() {
             <p className="text-[14px] font-semibold text-muted-foreground">검색 결과가 없습니다</p>
           </div>
         ) : (
-          filteredDevices.map((device) => (
-            <div
-              key={device.id}
-              onClick={() => setSelectedDevice(device)}
-              className="group flex items-center gap-5 rounded-2xl border border-border bg-white p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
-            >
-              {/* 아이콘 */}
-              <div
-                className={`flex h-12 w-12 items-center justify-center rounded-xl shrink-0 ${
-                  device.status === 'normal'
-                    ? 'bg-success/10'
-                    : device.status === 'warning'
-                      ? 'bg-warning/10'
-                      : 'bg-destructive/10'
-                }`}
-              >
-                <Radio
-                  className={`h-6 w-6 ${
-                    device.status === 'normal'
-                      ? 'text-success'
-                      : device.status === 'warning'
-                        ? 'text-warning'
-                        : 'text-destructive'
-                  }`}
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            {filteredDevices.map((device) => {
+              const conn = connectionMeta(device.connectionStatus)
+              return (
+                <div
+                  key={device.id}
+                  onClick={() => setSelectedDevice(device)}
+                  className="group rounded-2xl border border-border bg-white p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
+                >
+                  {/* 헤더: 아이콘 + 타이틀 + 상태뱃지 */}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`flex h-11 w-11 items-center justify-center rounded-xl shrink-0 ${
+                        device.status === 'normal'
+                          ? 'bg-success/10'
+                          : device.status === 'warning'
+                            ? 'bg-warning/10'
+                            : 'bg-destructive/10'
+                      }`}
+                    >
+                      <Radio
+                        className={`h-5 w-5 ${
+                          device.status === 'normal'
+                            ? 'text-success'
+                            : device.status === 'warning'
+                              ? 'text-warning'
+                              : 'text-destructive'
+                        }`}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-bold text-foreground truncate">{displayTitle(device)}</p>
+                      {device.alias?.trim() && (
+                        <p className="text-[11px] text-muted-foreground font-mono truncate">{device.mac}</p>
+                      )}
+                    </div>
+                    <StatusBadge status={device.status} />
+                  </div>
 
-              {/* 기기 정보 */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[15px] font-bold text-foreground">{displayTitle(device)}</p>
+                  {/* 상태 칩 2×2 */}
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <StatusChip
+                      icon={device.power ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
+                      label="전원"
+                      value={device.power ? 'ON' : 'OFF'}
+                      tone={device.power ? 'success' : 'muted'}
+                    />
+                    <StatusChip
+                      icon={createElement(conn.Icon, { className: 'h-4 w-4' })}
+                      label="동작"
+                      value={conn.label}
+                      tone={connTone(device.connectionStatus)}
+                    />
+                    <StatusChip
+                      icon={device.wifiSignal === 'DISCONNECTED' ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
+                      label="WiFi"
+                      value={WIFI_SIGNAL_LABEL[device.wifiSignal]}
+                      tone={wifiTone(device.wifiSignal)}
+                    />
+                    <StatusChip
+                      icon={<Thermometer className="h-4 w-4" />}
+                      label="과열"
+                      value={device.overTemperature ? '과열' : '정상'}
+                      tone={device.overTemperature ? 'destructive' : 'success'}
+                    />
+                  </div>
+
+                  {/* 푸터: 존 + 최근 업데이트 */}
+                  <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 truncate">
+                      <Building2 className="h-3 w-3 shrink-0" />
+                      {device.telecoilZoneName ?? '—'}
+                    </span>
+                    <span className="shrink-0">{formatDateTime(device.lastUpdated)}</span>
+                  </div>
                 </div>
-                <p className="text-[12px] text-muted-foreground">
-                  {device.telecoilZoneName ?? '—'} · <span className="font-mono">{device.mac}</span>
-                </p>
-              </div>
-
-              {/* 실시간 상태 인디케이터 */}
-              <div className="flex items-center gap-5 shrink-0">
-                {/* 전원 */}
-                <div className="flex flex-col items-center gap-1">
-                  {device.power ? (
-                    <Power className="h-4 w-4 text-success" />
-                  ) : (
-                    <PowerOff className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <span className="text-[10px] text-muted-foreground">전원</span>
-                </div>
-
-                {/* 동작 */}
-                <div className="flex flex-col items-center gap-1">
-                  {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
-                  <span className="text-[10px] text-muted-foreground">동작</span>
-                </div>
-
-                {/* WiFi 신호 */}
-                <div className="flex flex-col items-center gap-1">
-                  <WifiSignalIcon signal={device.wifiSignal} className="h-4 w-4" />
-                  <span className="text-[10px] text-muted-foreground">WiFi</span>
-                </div>
-
-                {/* 과열 경보 */}
-                <div className="flex flex-col items-center gap-1">
-                  <Thermometer
-                    className={`h-4 w-4 ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
-                  />
-                  <span className="text-[10px] text-muted-foreground">과열</span>
-                </div>
-              </div>
-
-              {/* 상태 뱃지 + 화살표 */}
-              <div className="flex items-center gap-3 shrink-0">
-                <StatusBadge status={device.status} />
-                <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-              </div>
-            </div>
-          ))
+              )
+            })}
+          </div>
         )}
       </div>
 
