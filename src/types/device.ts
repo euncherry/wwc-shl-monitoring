@@ -3,12 +3,22 @@ export type DeviceStatus = 'normal' | 'warning' | 'error' | 'offline'
 /** Wi-Fi 신호 강도 (RSSI 기반, REAL — 백엔드 3f1f93a). STRONG≥-55 / FAIR≥-67 / WEAK<-67 / DISCONNECTED=미수신·끊김 */
 export type WifiSignal = 'DISCONNECTED' | 'WEAK' | 'FAIR' | 'STRONG'
 
+/**
+ * 연결 상태 (REAL — 백엔드 d1d09c0). is_connected를 보강·대체.
+ * OFFLINE=끊김 / CONNECTING=연결됨, 워밍업 중(HelloRequest~StatusReport 전) / ONLINE=정상 운영(StatusReport 수신 후).
+ * is_connected = (connection_status !== OFFLINE).
+ */
+export type ConnectionStatus = 'OFFLINE' | 'CONNECTING' | 'ONLINE'
+
 export interface HearingLoop {
   id: string
   mac: string
   /** 별칭(alias). 없으면 MAC이 메인 타이틀. (옛 mock 데이터엔 없을 수 있어 optional) */
   alias?: string | null
+  /** 전원/연결 여부 (is_connected = connection_status !== OFFLINE) */
   power: boolean
+  /** 기기 동작/가동 상태 (REAL — connection_status). ONLINE=정상 작동 / CONNECTING=준비 중 / OFFLINE=작동 중지 */
+  connectionStatus: ConnectionStatus
   /** 과열(Over Temperature) 경보. true=과열 감지, false=정상. ⚠️ 동작 여부 아님 — last_gpio_state 기반. */
   overTemperature: boolean
   networkConnected: boolean
@@ -62,8 +72,10 @@ export interface DeviceResponseDto {
   last_seen_at: string | null
   /** ESP32 펌웨어 버전 (REAL — HelloRequest 수신 시 갱신) */
   firmware_version: string | null
-  /** 기기 연결 여부 (REAL — IoT Core lifecycle 이벤트 기반). 동작/가동 여부 판단의 신뢰 키. */
-  is_connected: boolean
+  /** ⚠️ deprecated: staging 응답에서 제거됨. connection_status로 대체. (구버전 호환용 optional) */
+  is_connected?: boolean
+  /** 연결 상태 (REAL — d1d09c0). OFFLINE/CONNECTING/ONLINE. 동작/가동 판단의 신뢰 키. */
+  connection_status: ConnectionStatus
   /** Wi-Fi 신호 강도 (REAL — 3f1f93a). RSSI ENUM. */
   wifi_signal: WifiSignal
   zone: ZoneSummary | null

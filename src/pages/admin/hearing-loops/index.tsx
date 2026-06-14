@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import type { HearingLoop, DeviceStatusLogDto } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
+import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
 import {
   useDevices,
@@ -654,12 +655,21 @@ function DeviceDetailModal({
 
           {/* Info grid — 조회 전용 */}
           <div className="grid grid-cols-2 gap-4">
-            {/* 전원 — 목 */}
+            {/* 전원 — 실값(is_connected = connection_status !== OFFLINE) */}
             <div className="rounded-xl border border-border p-4">
               <span className="text-[12px] text-muted-foreground block mb-2">전원 상태</span>
               <div className="flex items-center gap-2">
                 <PowerIcon on={device.power} />
                 <span className="text-sm font-bold text-foreground">{device.power ? 'ON' : 'OFF'}</span>
+              </div>
+            </div>
+
+            {/* 기기 동작 여부 — 실값(connection_status). ONLINE=정상 작동/CONNECTING=준비 중/OFFLINE=작동 중지 */}
+            <div className="rounded-xl border border-border p-4">
+              <span className="text-[12px] text-muted-foreground block mb-2">기기 동작 여부</span>
+              <div className="flex items-center gap-2">
+                <Activity className={`h-4 w-4 ${connectionMeta(device.connectionStatus).color}`} />
+                <span className={`text-sm font-bold ${connectionMeta(device.connectionStatus).color}`}>{connectionMeta(device.connectionStatus).label}</span>
               </div>
             </div>
 
