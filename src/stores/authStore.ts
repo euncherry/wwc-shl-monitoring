@@ -12,6 +12,8 @@ interface AuthState {
   isAuthenticated: boolean
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
+  /** 프로필 부분 갱신(예: 이메일 수정 후 동기화) */
+  updateUser: (patch: Partial<User>) => void
 }
 
 /** 백엔드 role enum → 프론트 UserRole (CLAUDE.md §5) */
@@ -78,6 +80,10 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         set({ user: null, token: null, isAuthenticated: false })
+      },
+
+      updateUser: (patch) => {
+        set((s) => ({ user: s.user ? { ...s.user, ...patch } : s.user }))
       },
     }),
     {
