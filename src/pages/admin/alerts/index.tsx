@@ -20,6 +20,7 @@ import {
   Layers,
   Settings,
   Loader2,
+  Info,
 } from 'lucide-react'
 import { alertsApi } from '@/api/alerts'
 import {
@@ -78,6 +79,13 @@ const TYPE_ICON: Record<AlertTypeEnum, typeof Thermometer> = {
 }
 
 const TYPE_OPTIONS: AlertTypeEnum[] = ['TEMPERATURE_ANOMALY', 'CONNECTION_LOST', 'FIRMWARE_UPDATE_AVAILABLE']
+
+/** 알림 발생 기준 안내 (백엔드 alerts.service 트리거 조건 기준) */
+const ALERT_GUIDE: { type: AlertTypeEnum; priority: AlertPriorityEnum; condition: string }[] = [
+  { type: 'CONNECTION_LOST', priority: 'CRITICAL', condition: '기기가 설정한 시간(기본 4시간) 이상 서버와 통신되지 않을 때' },
+  { type: 'TEMPERATURE_ANOMALY', priority: 'CRITICAL', condition: '기기에서 과열(고온 보호 동작)이 감지될 때' },
+  { type: 'FIRMWARE_UPDATE_AVAILABLE', priority: 'INFO', condition: '기기 펌웨어 버전이 최신 등록 버전보다 낮을 때' },
+]
 
 /* ══════════════════════════════════════════════════════
    Sub-components
@@ -289,6 +297,7 @@ export default function AlertCenterPage() {
   const [selectedAlert, setSelectedAlert] = useState<AlertResponseDto | null>(null)
   const [showTypeFilter, setShowTypeFilter] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const [bulkRunning, setBulkRunning] = useState(false)
 
   const filters = {
@@ -454,6 +463,39 @@ export default function AlertCenterPage() {
           </button>
 
           <span className="ml-auto text-[12px] text-muted-foreground">최신순</span>
+        </div>
+
+        {/* 알림 발생 기준 안내 (접이식) */}
+        <div className="border-b border-border/50 bg-page/20">
+          <button
+            onClick={() => setShowGuide((v) => !v)}
+            className="flex w-full items-center gap-2 px-5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Info className="h-3.5 w-3.5 text-primary" />
+            알림은 이런 경우 발생해요
+            {showGuide ? <ChevronUp className="ml-1 h-3.5 w-3.5" /> : <ChevronDown className="ml-1 h-3.5 w-3.5" />}
+          </button>
+          {showGuide && (
+            <div className="space-y-2 px-5 pb-4 pt-1">
+              {ALERT_GUIDE.map(({ type, priority, condition }) => {
+                const Icon = TYPE_ICON[type]
+                const lv = levelConfig[PRIORITY_TO_LEVEL[priority]]
+                return (
+                  <div key={type} className={`flex items-start gap-3 rounded-xl border px-4 py-2.5 ${lv.border} ${lv.bg}`}>
+                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${lv.text}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-bold text-foreground">{ALERT_TYPE_LABEL[type]}</span>
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${lv.border} ${lv.text}`}>{lv.label}</span>
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">{condition}</p>
+                    </div>
+                  </div>
+                )
+              })}
+              <p className="px-1 pt-1 text-[11px] text-muted-foreground">※ '연결 끊김'의 미연결 기준 시간은 우측 상단 <span className="font-semibold text-foreground">'알림 설정'</span>에서 변경할 수 있습니다.</p>
+            </div>
+          )}
         </div>
 
         {/* Table */}
