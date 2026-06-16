@@ -29,6 +29,12 @@ export interface HearingLoop {
   temperature: number
   volume: number
   firmwareVersion: string
+  /** ESP32 WiFi MCU 펌웨어 버전 */
+  wifiFirmwareVersion: string | null
+  /** Nordic NRF HL MCU 펌웨어 버전 */
+  hlFirmwareVersion: string | null
+  /** 펌웨어 불일치 — 업데이트 도중 WiFi MCU·HL MCU 중 하나만 성공 시 true */
+  firmwareInconsistent: boolean
   status: DeviceStatus
   telecoilZoneId: string | null
   telecoilZoneName: string | null
@@ -74,6 +80,10 @@ export interface DeviceResponseDto {
   last_seen_at: string | null
   /** ESP32 펌웨어 버전 (REAL — HelloRequest 수신 시 갱신) */
   firmware_version: string | null
+  /** ESP32 WiFi MCU 펌웨어 버전 */
+  wifi_firmware_version: string | null
+  /** Nordic NRF HL MCU 펌웨어 버전 */
+  hl_firmware_version: string | null
   /** ⚠️ deprecated: staging 응답에서 제거됨. connection_status로 대체. (구버전 호환용 optional) */
   is_connected?: boolean
   /** 연결 상태 (REAL — d1d09c0). OFFLINE/CONNECTING/ONLINE. 동작/가동 판단의 신뢰 키. */
@@ -82,6 +92,8 @@ export interface DeviceResponseDto {
   wifi_signal: WifiSignal
   /** ⚠️ 임시: Wi-Fi RSSI 원시값(dBm). 신호 단계 디버깅용 — 검증 후 제거 예정 */
   wifi_rssi_dbm?: number | null
+  /** 펌웨어 불일치 — 업데이트 도중 WiFi MCU·HL MCU 중 하나만 성공 시 true */
+  firmware_inconsistent: boolean
   zone: ZoneSummary | null
   created_at: string
 }

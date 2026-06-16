@@ -22,6 +22,7 @@ import {
   Plus,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   CalendarClock,
   Building2,
   Target,
@@ -31,6 +32,7 @@ import {
   RefreshCw,
   ChevronLeft,
 } from 'lucide-react'
+import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { HearingLoop, DeviceStatusLogDto } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
@@ -426,6 +428,22 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   )
 }
 
+function FirmwareInconsistentBadge() {
+  return (
+    <TooltipRoot>
+      <TooltipTrigger asChild>
+        <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
+          <AlertTriangle className="h-2.5 w-2.5" />
+          불일치
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        업데이트 도중 WiFi MCU와 HL MCU 중 하나만 성공하여 펌웨어 상태를 추적할 수 없는 상태입니다. 두 MCU가 동일한 버전이 되도록 재업데이트가 필요합니다.
+      </TooltipContent>
+    </TooltipRoot>
+  )
+}
+
 function PowerIcon({ on }: { on: boolean }) {
   return on ? (
     <Power className="h-4 w-4 text-success" />
@@ -694,30 +712,49 @@ function DeviceDetailModal({
           </div>
 
           {/* Meta info */}
-          <div className="rounded-xl border border-border divide-y divide-border/50">
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                <Shield className="h-4 w-4 text-muted-foreground" />
-                <span className="text-[13px] text-muted-foreground">펌웨어 버전</span>
-              </div>
-              <span className="text-[13px] font-semibold text-foreground">{device.firmwareVersion || '—'}</span>
-            </div>
-
-            {[
-              { label: 'MAC 주소', value: device.mac, icon: Hash },
-              { label: '등록일', value: formatDateTime(device.registeredAt), icon: CalendarClock },
-              { label: '최근 업데이트', value: formatDateTime(device.lastUpdated), icon: Activity },
-            ].map((row) => (
-              <div key={row.label} className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <row.icon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-[13px] text-muted-foreground">{row.label}</span>
+          <div className="space-y-2">
+            {device.firmwareInconsistent && (
+              <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" />
+                <div>
+                  <p className="text-[12px] font-semibold text-warning">펌웨어 불일치 감지</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    업데이트 도중 WiFi MCU와 HL MCU 중 하나만 성공하여 펌웨어 상태를 추적할 수 없습니다. 두 MCU가 동일한 버전이 되도록 재업데이트가 필요합니다.
+                  </p>
                 </div>
-                <span className={`text-[13px] font-semibold ${row.value === '미배정' ? 'text-warning' : 'text-foreground'}`}>
-                  {row.value}
-                </span>
               </div>
-            ))}
+            )}
+            <div className="rounded-xl border border-border divide-y divide-border/50">
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-[13px] text-muted-foreground">WiFi MCU 버전</span>
+                </div>
+                <span className="text-[13px] font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-[13px] text-muted-foreground">HL MCU 버전</span>
+                </div>
+                <span className="text-[13px] font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
+              </div>
+              {[
+                { label: 'MAC 주소', value: device.mac, icon: Hash },
+                { label: '등록일', value: formatDateTime(device.registeredAt), icon: CalendarClock },
+                { label: '최근 업데이트', value: formatDateTime(device.lastUpdated), icon: Activity },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <row.icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-[13px] text-muted-foreground">{row.label}</span>
+                  </div>
+                  <span className={`text-[13px] font-semibold ${row.value === '미배정' ? 'text-warning' : 'text-foreground'}`}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 기기 이력 — 알림(REAL) / 상태(REAL) / 전체 합본 */}
@@ -1265,7 +1302,17 @@ export default function HearingLoopsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-center">
-                        <span className="text-[12px] font-mono font-semibold text-foreground">{device.firmwareVersion || '—'}</span>
+                        <div className="inline-flex flex-col items-center gap-1">
+                          {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
+                          <p className="text-[10px] text-muted-foreground leading-tight">
+                            <span className="font-medium">WiFi</span>{' '}
+                            <span className="font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground leading-tight">
+                            <span className="font-medium">HL</span>{' '}
+                            <span className="font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
+                          </p>
+                        </div>
                       </td>
                       <td className="px-5 py-3.5"><span className="text-[12px] text-muted-foreground">{formatDateTime(device.lastUpdated)}</span></td>
                       <td className="px-3 py-3.5 text-center">

@@ -18,6 +18,7 @@ import {
   XCircle,
   Loader2,
 } from 'lucide-react'
+import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { HearingLoop, DeviceStatus, ConnectionStatus, WifiSignal } from '@/types/device'
 import { useDevices, useUpdateAlias } from '@/hooks/useDevices'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL, wifiSignalColor } from '@/components/WifiSignalIcon'
@@ -32,6 +33,22 @@ import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
 /** 별칭 있으면 별칭, 없으면 MAC */
 function displayTitle(device: Pick<HearingLoop, 'alias' | 'mac'>) {
   return device.alias?.trim() ? device.alias : device.mac
+}
+
+function FirmwareInconsistentBadge() {
+  return (
+    <TooltipRoot>
+      <TooltipTrigger asChild>
+        <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
+          <AlertTriangle className="h-2.5 w-2.5" />
+          불일치
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        업데이트 도중 WiFi MCU와 HL MCU 중 하나만 성공하여 펌웨어 상태를 추적할 수 없는 상태입니다. 재업데이트가 필요합니다.
+      </TooltipContent>
+    </TooltipRoot>
+  )
 }
 
 /* ── Sub-components ── */
@@ -270,18 +287,39 @@ function DeviceDetailModal({
           </div>
 
           {/* 기기 정보 */}
-          <div className="rounded-xl border border-border divide-y divide-border/50">
-            {[
-              { label: '텔레코일존', value: device.telecoilZoneName ?? '—' },
-              { label: 'MAC 주소', value: device.mac },
-              { label: '최근 업데이트', value: formatDateTime(device.lastUpdated) },
-              { label: '등록일', value: formatDateTime(device.registeredAt) },
-            ].map((row) => (
-              <div key={row.label} className="flex items-center justify-between px-4 py-3">
-                <span className="text-[13px] text-muted-foreground">{row.label}</span>
-                <span className="text-[13px] font-semibold text-foreground">{row.value}</span>
+          <div className="space-y-2">
+            {device.firmwareInconsistent && (
+              <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" />
+                <div>
+                  <p className="text-[12px] font-semibold text-warning">펌웨어 불일치 감지</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    업데이트 도중 WiFi MCU와 HL MCU 중 하나만 성공하여 펌웨어 상태를 추적할 수 없습니다. 관리자에게 재업데이트를 요청하세요.
+                  </p>
+                </div>
               </div>
-            ))}
+            )}
+            <div className="rounded-xl border border-border divide-y divide-border/50">
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-[13px] text-muted-foreground">WiFi MCU 버전</span>
+                <span className="text-[13px] font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-[13px] text-muted-foreground">HL MCU 버전</span>
+                <span className="text-[13px] font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
+              </div>
+              {[
+                { label: '텔레코일존', value: device.telecoilZoneName ?? '—' },
+                { label: 'MAC 주소', value: device.mac },
+                { label: '최근 업데이트', value: formatDateTime(device.lastUpdated) },
+                { label: '등록일', value: formatDateTime(device.registeredAt) },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center justify-between px-4 py-3">
+                  <span className="text-[13px] text-muted-foreground">{row.label}</span>
+                  <span className="text-[13px] font-semibold text-foreground">{row.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -450,7 +488,10 @@ export default function UserHearingLoops() {
                         <p className="text-[11px] text-muted-foreground font-mono truncate">{device.mac}</p>
                       )}
                     </div>
-                    <StatusBadge status={device.status} />
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <StatusBadge status={device.status} />
+                      {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
+                    </div>
                   </div>
 
                   {/* 상태 칩 2×2 */}
