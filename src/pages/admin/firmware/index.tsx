@@ -184,6 +184,7 @@ interface DeviceProgress {
   target: McuState | null
   errorMessage: string | null
   sessionId: number | null
+  firmwareId: number | null
 }
 
 /** self / target 진행 바 한 줄 */
@@ -299,7 +300,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
     // 전체 기기 connecting 으로 초기화 (waiting 없이 바로 시작)
     setProgress(
       Object.fromEntries(
-        macList.map((mac) => [mac, { phase: 'connecting' as ProgressPhase, self: null, target: null, errorMessage: null, sessionId: null }]),
+        macList.map((mac) => [mac, { phase: 'connecting' as ProgressPhase, self: null, target: null, errorMessage: null, sessionId: null, firmwareId: null }]),
       ),
     )
 
@@ -315,7 +316,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
               mac,
               (event) => {
                 setProgress((prev) => {
-                  const curr = prev[mac] ?? { phase: 'in_progress', self: null, target: null, errorMessage: null, sessionId: null }
+                  const curr = prev[mac] ?? { phase: 'in_progress', self: null, target: null, errorMessage: null, sessionId: null, firmwareId: null }
                   const mcuState: McuState = { progress: event.progress_percent, status: event.status }
                   const phase: ProgressPhase = event.status === 'failed' ? 'failed' : 'in_progress'
                   const errorMessage = event.status === 'failed' ? (event.message ?? '업데이트 실패') : curr.errorMessage
@@ -347,7 +348,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                 setProgress((prev) => {
                   const curr = prev[mac]
                   if (!curr) return prev
-                  return { ...prev, [mac]: { ...curr, sessionId: resp.session_id } }
+                  return { ...prev, [mac]: { ...curr, sessionId: resp.session_id, firmwareId: resp.firmware_id } }
                 })
               })
               .catch((err) => {
@@ -357,7 +358,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                   : (typeof raw === 'string' ? raw : '전송 요청 실패')
                 setProgress((prev) => ({
                   ...prev,
-                  [mac]: { phase: 'failed', self: null, target: null, errorMessage: msg, sessionId: null },
+                  [mac]: { phase: 'failed', self: null, target: null, errorMessage: msg, sessionId: null, firmwareId: null },
                 }))
                 unsubscribe()
                 settle()

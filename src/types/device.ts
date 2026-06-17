@@ -4,11 +4,11 @@ export type DeviceStatus = 'normal' | 'warning' | 'error' | 'offline'
 export type WifiSignal = 'DISCONNECTED' | 'WEAK' | 'FAIR' | 'STRONG'
 
 /**
- * 연결 상태 (REAL — 백엔드 d1d09c0). is_connected를 보강·대체.
- * OFFLINE=끊김 / CONNECTING=연결됨, 워밍업 중(HelloRequest~StatusReport 전) / ONLINE=정상 운영(StatusReport 수신 후).
+ * 연결 상태 (REAL). is_connected를 보강·대체.
+ * OFFLINE=끊김 / ONLINE=정상 운영 / UPDATING=펌웨어 업데이트 진행 중.
  * is_connected = (connection_status !== OFFLINE).
  */
-export type ConnectionStatus = 'OFFLINE' | 'CONNECTING' | 'ONLINE'
+export type ConnectionStatus = 'OFFLINE' | 'ONLINE' | 'UPDATING'
 
 export interface HearingLoop {
   id: string
@@ -17,7 +17,7 @@ export interface HearingLoop {
   alias?: string | null
   /** 전원/연결 여부 (is_connected = connection_status !== OFFLINE) */
   power: boolean
-  /** 기기 동작/가동 상태 (REAL — connection_status). ONLINE=정상 작동 / CONNECTING=준비 중 / OFFLINE=작동 중지 */
+  /** 기기 동작/가동 상태 (REAL — connection_status). ONLINE=정상 작동 / UPDATING=업데이트 중 / OFFLINE=작동 중지 */
   connectionStatus: ConnectionStatus
   /** 과열(Over Temperature) 경보. true=과열 감지, false=정상. ⚠️ 동작 여부 아님 — last_gpio_state 기반. */
   overTemperature: boolean

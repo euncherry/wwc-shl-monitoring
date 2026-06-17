@@ -5,7 +5,7 @@ import type { DeviceApiResponse, DeviceStatus, HearingLoop } from '@/types/devic
  * ⚠️ 백엔드 `status`(PENDING/ACTIVE)와 무관 — `connection_status`·`last_gpio_state`(실값)로 FE가 계산한다.
  * - offline: connection_status === 'OFFLINE'
  * - warning: last_gpio_state=true (과열 Over Temperature 경보). 온도 센서가 없어 실제 온도값은 무의미.
- * - normal:  그 외 (CONNECTING·ONLINE)
+ * - normal:  그 외 (ONLINE·UPDATING)
  * (error는 에러 로그 기반이라 GET /devices/:mac/errors 연동 시 추가 — 현재 미파생)
  * ⚠️ is_connected는 staging 응답에서 제거됨(connection_status로 대체) → 더 이상 사용 안 함.
  */
@@ -18,7 +18,7 @@ export function deriveStatus(dto: DeviceApiResponse): DeviceStatus {
 /**
  * DeviceApiResponse(실응답 + MSW 목 병합) → HearingLoop 뷰모델.
  * 실값: mac/alias/zone/과열경보(last_gpio_state)/펌웨어버전(firmware_version)/연결상태(connection_status)/등록일/last_seen_at/id
- * 동작/가동·전원·네트워크: connection_status로 파생(OFFLINE=꺼짐/끊김, CONNECTING·ONLINE=켜짐). 전원=연결여부, 동작=ONLINE.
+ * 동작/가동·전원·네트워크: connection_status로 파생(OFFLINE=꺼짐/끊김, ONLINE·UPDATING=켜짐). 전원=연결여부, 동작=ONLINE.
  *   ⚠️ is_connected는 staging 응답에서 제거됨 → connection_status에서 파생(!== OFFLINE).
  * 과열 경보: last_gpio_state(true=과열, false=정상). ⚠️ 동작 여부 아님.
  * 온도(last_temperature)는 센서가 없어 무의미 → 과열 판단엔 미사용.

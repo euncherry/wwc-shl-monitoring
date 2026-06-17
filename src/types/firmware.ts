@@ -41,6 +41,7 @@ export interface Firmware {
 export interface SendFirmwareResponse {
   message: string
   session_id: number
+  firmware_id: number
 }
 
 /** SSE GET /firmware/:mac/update-progress 이벤트 data */
@@ -50,6 +51,8 @@ export interface FirmwareUpdateProgress {
   progress_percent: number
   status: 'downloading' | 'verifying' | 'flashing' | 'complete' | 'failed'
   message: string | null
+  /** true 이면 이 이벤트가 마지막 — 프론트에서 SSE 스트림 종료 */
+  is_final?: boolean
 }
 
 /** GET /firmware/:mac/sessions 항목 */

@@ -92,6 +92,7 @@ export const firmwareApi = {
               try {
                 const json = JSON.parse(dataLine.slice(5).trim()) as FirmwareUpdateProgress
                 onEvent(json)
+                if (json.is_final) { reader.cancel(); return }
               } catch { /* JSON 파싱 실패 무시 */ }
             }
           }

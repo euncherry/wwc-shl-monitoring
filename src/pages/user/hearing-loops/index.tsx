@@ -81,7 +81,7 @@ const TONE: Record<Tone, string> = {
 }
 
 function connTone(s: ConnectionStatus): Tone {
-  return s === 'ONLINE' ? 'success' : s === 'CONNECTING' ? 'warning' : 'muted'
+  return s === 'ONLINE' ? 'success' : s === 'UPDATING' ? 'info' : 'muted'
 }
 
 function wifiTone(s: WifiSignal): Tone {
