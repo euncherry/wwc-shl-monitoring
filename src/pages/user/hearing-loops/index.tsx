@@ -71,13 +71,14 @@ function StatusBadge({ status }: { status: DeviceStatus }) {
 
 /* ── Status Chip (전원·동작·WiFi·과열) ── */
 
-type Tone = 'success' | 'warning' | 'destructive' | 'muted'
+type Tone = 'success' | 'warning' | 'destructive' | 'muted' | 'info'
 
 const TONE: Record<Tone, string> = {
   success: 'bg-success/10 text-success',
   warning: 'bg-warning/10 text-warning',
   destructive: 'bg-destructive/10 text-destructive',
   muted: 'bg-muted text-muted-foreground',
+  info: 'bg-primary/10 text-primary',
 }
 
 function connTone(s: ConnectionStatus): Tone {

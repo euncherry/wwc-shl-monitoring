@@ -682,7 +682,7 @@ function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 기기 동작 여부 — 실값(connection_status). ONLINE=정상 작동/CONNECTING=준비 중/OFFLINE=작동 중지 */}
+            {/* 기기 동작 여부 — 실값(connection_status). ONLINE=정상 작동/UPDATING=업데이트 중/OFFLINE=작동 중지 */}
             <div className="rounded-xl border border-border p-4">
               <span className="text-[12px] text-muted-foreground block mb-2">기기 동작 여부</span>
               <div className="flex items-center gap-2">
