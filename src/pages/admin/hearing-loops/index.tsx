@@ -211,7 +211,7 @@ function UpdateSessionDetailModal({ sessionId, onClose }: { sessionId: number; o
                         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
                           log.type === 'self' ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'
                         }`}>
-                          {log.type === 'self' ? 'Nordic' : 'ESP32'}
+                          {log.type === 'self' ? 'ESP32' : 'Nordic'}
                         </span>
                         <span className="w-16 shrink-0 font-mono font-bold text-foreground">
                           {log.progress_percent != null ? `${log.progress_percent}%` : '—'}

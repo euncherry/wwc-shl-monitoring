@@ -527,8 +527,8 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                               {/* 진행 바 (in_progress) */}
                               {phase === 'in_progress' && (
                                 <div className="mt-3 space-y-2.5">
-                                  <ProgressBar label="Nordic MCU (HL)" mcu={prog?.self ?? null} />
-                                  <ProgressBar label="ESP32 MCU (WiFi)" mcu={prog?.target ?? null} />
+                                  <ProgressBar label="ESP32 MCU (WiFi)" mcu={prog?.self ?? null} />
+                                  <ProgressBar label="Nordic MCU (HL)" mcu={prog?.target ?? null} />
                                 </div>
                               )}
 
