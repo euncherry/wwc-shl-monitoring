@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import axios from 'axios'
 import {
   Search,
   Plus,
@@ -9,7 +10,7 @@ import {
   Send,
   Radio,
   Building2,
-  FileText,
+  FileArchive,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -42,8 +43,8 @@ function fileName(key: string): string {
 }
 
 /* ══════════════════════════════════════════════════════
-   Upload Modal — 펌웨어 추가 (HL + WiFi 2파일 세트)
-   버전은 서버가 자동 부여. 설명/타입 입력 없음.
+   Upload Modal — 펌웨어 추가 (릴리즈 패키지 zip 1개)
+   버전·변경내역은 zip 내 update.json에서 서버가 파싱.
    ══════════════════════════════════════════════════════ */
 
 /** 단일 파일 선택 필드 */
@@ -54,6 +55,7 @@ function FilePicker({
   file,
   disabled,
   onPick,
+  accept = '.bin,application/octet-stream',
 }: {
   label: string
   hint: string
@@ -61,6 +63,7 @@ function FilePicker({
   file: File | null
   disabled: boolean
   onPick: (f: File | null) => void
+  accept?: string
 }) {
   return (
     <div>
@@ -74,7 +77,7 @@ function FilePicker({
         <span className="min-w-0 flex-1 truncate font-semibold">{file ? file.name : hint}</span>
         <input
           type="file"
-          accept=".bin,application/octet-stream"
+          accept={accept}
           disabled={disabled}
           onChange={(e) => onPick(e.target.files?.[0] ?? null)}
           className="hidden"
@@ -87,20 +90,23 @@ function FilePicker({
 function UploadModal({ onClose }: { onClose: () => void }) {
   useLockBodyScroll()
   const upload = useUploadFirmware()
-  const [hlFile, setHlFile] = useState<File | null>(null)
-  const [wifiFile, setWifiFile] = useState<File | null>(null)
-  const [description, setDescription] = useState('')
+  const [zipFile, setZipFile] = useState<File | null>(null)
   const [error, setError] = useState('')
 
   const submit = () => {
     setError('')
-    if (!hlFile) { setError('HL 펌웨어 파일을 선택해주세요.'); return }
-    if (!wifiFile) { setError('WiFi 펌웨어 파일을 선택해주세요.'); return }
+    if (!zipFile) { setError('펌웨어 패키지(zip)를 선택해주세요.'); return }
     upload.mutate(
-      { hlFile, wifiFile, description: description.trim() || undefined },
+      { zipFile },
       {
         onSuccess: onClose,
-        onError: () => setError('펌웨어 업로드에 실패했습니다.'),
+        onError: (err) => {
+          const msg =
+            axios.isAxiosError(err) && err.response?.data && typeof err.response.data === 'object'
+              ? (err.response.data as { message?: string }).message
+              : undefined
+          setError(msg || '펌웨어 업로드에 실패했습니다.')
+        },
       },
     )
   }
@@ -115,7 +121,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-foreground">펌웨어 추가</h3>
-              <p className="text-[12px] text-muted-foreground">HL · WiFi 펌웨어를 한 세트로 업로드합니다. 버전은 자동 부여됩니다.</p>
+              <p className="text-[12px] text-muted-foreground">릴리즈 패키지(hearingloop_*.zip)를 업로드합니다. 버전·변경내역은 zip에서 자동 추출됩니다.</p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors">
@@ -124,24 +130,10 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto scrollbar-thin p-6">
-          <FilePicker label="HL 펌웨어" hint="HearingLoop MCU 펌웨어 선택 (.bin)" icon={Cpu} file={hlFile} disabled={upload.isPending} onPick={setHlFile} />
-          <FilePicker label="WiFi 펌웨어" hint="WiFi 모듈 펌웨어 선택 (.bin)" icon={Wifi} file={wifiFile} disabled={upload.isPending} onPick={setWifiFile} />
+          <FilePicker label="펌웨어 패키지" hint="hearingloop_<날짜>.zip 선택" icon={FileArchive} file={zipFile} disabled={upload.isPending} onPick={setZipFile} accept=".zip,application/zip" />
 
-          <div>
-            <label className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-              간단 설명
-              <span className="text-[11px] font-normal text-muted-foreground">(선택)</span>
-            </label>
-            <textarea
-              placeholder="예: 버그 수정 및 연결 안정성 개선"
-              value={description}
-              maxLength={255}
-              disabled={upload.isPending}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="w-full resize-none rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            />
+          <div className="rounded-xl border border-border bg-page/40 px-4 py-3 text-[12px] leading-relaxed text-muted-foreground">
+            zip 내부에 <span className="font-semibold text-foreground">update.json</span> + ESP32·nRF 펌웨어(.bin)가 포함되어야 합니다. 버전(릴리즈·WiFi·HL)과 변경 내역은 update.json에서 자동으로 읽습니다.
           </div>
 
           {error && (
@@ -631,7 +623,7 @@ export default function FirmwarePage() {
     return all.filter(
       (f) =>
         f.version.toLowerCase().includes(q) ||
-        f.description.toLowerCase().includes(q) ||
+        f.updates.join(' ').toLowerCase().includes(q) ||
         f.hlS3Key.toLowerCase().includes(q) ||
         f.wifiS3Key.toLowerCase().includes(q),
     )
@@ -685,7 +677,7 @@ export default function FirmwarePage() {
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">버전</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">HL 펌웨어</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi 펌웨어</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">설명</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">변경 내역</th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">업로드 일시</th>
                 <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전송</th>
               </tr>
@@ -696,7 +688,10 @@ export default function FirmwarePage() {
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2.5">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10"><Cpu className="h-4 w-4 text-primary" /></div>
-                      <span className="font-mono text-[13px] font-bold text-foreground">v{f.version}</span>
+                      <div className="leading-tight">
+                        <span className="font-mono text-[13px] font-bold text-foreground">v{f.version}</span>
+                        <span className="block text-[10px] text-muted-foreground">WiFi {f.wifiVersion || '—'} · HL {f.hlVersion || '—'}</span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-5 py-3.5">
@@ -710,7 +705,15 @@ export default function FirmwarePage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className="text-[13px] text-foreground">{f.description || <span className="text-muted-foreground">—</span>}</span>
+                    {f.updates.length > 0 ? (
+                      <ul className="space-y-0.5">
+                        {f.updates.map((u, i) => (
+                          <li key={i} className="text-[12px] text-foreground">{u}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="text-[13px] text-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <span className="text-[13px] text-muted-foreground">{formatDateTime(f.uploadedAt)}</span>

@@ -8,19 +8,16 @@ import type {
   UpdateSessionDetailDto,
 } from '@/types/firmware'
 
-/** POST /firmware 입력 — HL + WiFi 펌웨어 2파일 세트 */
+/** POST /firmware 입력 — 릴리즈 패키지 zip 1개 (update.json + bin 2개 내장) */
 export interface UploadFirmwareInput {
-  /** HearingLoop MCU 펌웨어 바이너리 */
-  hlFile: File
-  /** WiFi 모듈 펌웨어 바이너리 */
-  wifiFile: File
-  /** 간단 설명(선택, 255자) */
-  description?: string
+  /** hearingloop_<DATE>.zip — 서버가 update.json 파싱(release_version·버전·변경내역 추출) */
+  zipFile: File
 }
 
 /**
  * 펌웨어 도메인 엔드포인트 (전부 REAL).
- * 2026-06-06 개편: 2파일 세트 업로드, 버전 서버 자동증가(409 없음), 설명/firmware_type 제거.
+ * 2026-06-18 개편(develop): 단일 zip(zip_file) 업로드 — 서버가 update.json 파싱
+ * (release_version·hl/wifi 버전·updates[]). 중복 release_version 400.
  */
 export const firmwareApi = {
   /** GET /firmware — 최신 업로드순(서버) */
@@ -29,12 +26,10 @@ export const firmwareApi = {
     return data
   },
 
-  /** POST /firmware (multipart) — hl_file + wifi_file 둘 다 필수. 400=파일 누락, 500=S3 실패 */
+  /** POST /firmware (multipart) — zip_file 1개. 400=zip 누락/구조 오류/중복 release_version, 500=S3 실패 */
   upload: async (input: UploadFirmwareInput) => {
     const form = new FormData()
-    form.append('hl_file', input.hlFile)
-    form.append('wifi_file', input.wifiFile)
-    if (input.description?.trim()) form.append('description', input.description.trim())
+    form.append('zip_file', input.zipFile)
     const { data } = await apiClient.post<FirmwareResponseDto>('/firmware', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })

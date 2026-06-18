@@ -12,14 +12,16 @@ export const firmwareKeys = {
     [...firmwareKeys.all, 'session', sessionId, page, limit] as const,
 }
 
-/** FirmwareResponseDto → 뷰모델 (구 응답엔 hl/wifi 키가 없을 수 있어 방어적으로 기본값) */
+/** FirmwareResponseDto → 뷰모델 (방어적 기본값) */
 function toFirmware(dto: FirmwareResponseDto): Firmware {
   return {
     id: dto.id,
     version: dto.version,
+    hlVersion: dto.hl_version ?? '',
+    wifiVersion: dto.wifi_version ?? '',
     hlS3Key: dto.hl_s3_key ?? '',
     wifiS3Key: dto.wifi_s3_key ?? '',
-    description: dto.description ?? '',
+    updates: dto.updates ?? [],
     uploadedAt: dto.uploaded_at,
   }
 }
@@ -36,7 +38,7 @@ export function useFirmwares() {
   })
 }
 
-/** 펌웨어 업로드 (multipart, HL+WiFi 2파일) — 400/500은 호출부에서 처리 */
+/** 펌웨어 업로드 (multipart, 단일 zip) — 400/500은 호출부에서 처리 */
 export function useUploadFirmware() {
   const qc = useQueryClient()
   return useMutation({
