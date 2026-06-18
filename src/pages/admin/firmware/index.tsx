@@ -363,17 +363,6 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
                 unsubscribe()
                 settle()
               })
-
-            // 2분 타임아웃
-            setTimeout(() => {
-              setProgress((prev) => {
-                const curr = prev[mac]
-                if (!curr || curr.phase === 'complete' || curr.phase === 'failed') return prev
-                return { ...prev, [mac]: { ...curr, phase: 'failed', errorMessage: '응답 시간 초과' } }
-              })
-              unsubscribe()
-              settle()
-            }, 120_000)
           }),
       ),
     )
