@@ -140,7 +140,7 @@ function AlertDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-border" onClick={(e) => e.stopPropagation()}>
         <div className={`px-6 py-5 border-b ${c.border} ${c.bg}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -196,7 +196,7 @@ function AlertDetailModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-page/30">
+        <div className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-border bg-page/30">
           {alert.status === 'PENDING' ? (
             <>
               <button
@@ -250,7 +250,7 @@ function ThresholdsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-border" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-page/50">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10"><Settings className="h-5 w-5 text-primary" /></div>
@@ -356,21 +356,21 @@ export default function AlertCenterPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-end justify-between pb-5 pt-5">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pb-3 pt-3 sm:pb-5 sm:pt-5">
         <div>
-          <h2 className="text-2xl font-black text-foreground tracking-tight">알림센터</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">알림센터</h2>
           <p className="text-sm text-muted-foreground mt-2">시스템에서 발생한 알림을 관리하고 처리 내역을 추적합니다.</p>
         </div>
         <button
           onClick={() => setShowSettings(true)}
-          className="flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:bg-page transition-colors shadow-sm"
+          className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:bg-page transition-colors shadow-sm w-full sm:w-auto"
         >
           <Settings className="h-4 w-4" />알림 설정
         </button>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiCards.map((card) => (
           <div key={card.label} className="rounded-2xl border border-border bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
@@ -388,7 +388,7 @@ export default function AlertCenterPage() {
       {/* Alert list */}
       <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
         {/* Tabs */}
-        <div className="grid grid-cols-4 border-b border-border">
+        <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-border">
           {tabConfig.map((tab) => {
             const isActive = activeTab === tab.key
             const styles: Record<TabKey, { activeBg: string; activeText: string; countBg: string; iconBg: string; bar: string }> = {
@@ -402,7 +402,7 @@ export default function AlertCenterPage() {
               <button
                 key={tab.key}
                 onClick={() => { setActiveTab(tab.key); setTypeFilter('all'); setPriorityFilter('all') }}
-                className={`relative flex items-center justify-center gap-2.5 py-4 text-[13px] font-semibold transition-all border-r last:border-r-0 border-border/50 ${
+                className={`relative flex items-center justify-center gap-2 sm:gap-2.5 px-2 py-3 sm:py-4 text-[12px] sm:text-[13px] font-semibold transition-all border-r last:border-r-0 border-border/50 ${
                   isActive ? `${s.activeBg} ${s.activeText}` : 'text-muted-foreground hover:text-foreground hover:bg-page/40'
                 }`}
               >
@@ -467,7 +467,7 @@ export default function AlertCenterPage() {
             <ChevronDown className="h-3 w-3" />
           </button>
 
-          <span className="ml-auto text-[12px] text-muted-foreground">최신순</span>
+          <span className="ml-auto self-center text-[12px] text-muted-foreground">최신순</span>
         </div>
 
         {/* 알림 발생 기준 안내 (접이식) */}
@@ -503,8 +503,8 @@ export default function AlertCenterPage() {
           )}
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Table (desktop) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-page/50 border-b border-border">
@@ -565,10 +565,70 @@ export default function AlertCenterPage() {
           </table>
         </div>
 
+        {/* Card list (mobile) */}
+        <div className="md:hidden">
+          {listQuery.isLoading ? (
+            <div className="px-4 py-16 text-center"><div className="flex flex-col items-center gap-2 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /><p className="text-sm">알림을 불러오는 중...</p></div></div>
+          ) : listQuery.isError ? (
+            <div className="px-4 py-16 text-center"><div className="flex flex-col items-center gap-2"><AlertTriangle className="h-8 w-8 text-destructive/60" /><p className="text-sm text-muted-foreground">알림을 불러오지 못했습니다.</p><button onClick={() => listQuery.refetch()} className="rounded-lg bg-page px-3 py-1.5 text-[12px] font-semibold text-foreground hover:bg-border/50">다시 시도</button></div></div>
+          ) : items.length === 0 ? (
+            <div className="px-4 py-16 text-center"><div className="flex flex-col items-center gap-2"><BellOff className="h-8 w-8 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">해당 조건의 알림이 없습니다.</p></div></div>
+          ) : (
+            <div className="space-y-3 p-4">
+              {items.map((alert) => {
+                const level = PRIORITY_TO_LEVEL[alert.priority]
+                const c = levelConfig[level]
+                const TypeIcon = TYPE_ICON[alert.type]
+                return (
+                  <div
+                    key={alert.id}
+                    onClick={() => setSelectedAlert(alert)}
+                    className="rounded-xl border border-border bg-white p-4 shadow-sm transition-colors hover:bg-main-blue-1/10 cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${c.border} ${c.bg}`}><TypeIcon className={`h-3.5 w-3.5 ${c.text}`} /></div>
+                        <span className="text-[13px] font-semibold text-foreground truncate">{ALERT_TYPE_LABEL[alert.type]}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <LevelBadge level={level} />
+                        <StateBadge status={alert.status} />
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-[12px] text-foreground">{alert.message}</p>
+
+                    <div className="mt-3 grid grid-cols-1 gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-muted-foreground">텔레코일존/디바이스</span>
+                        <div className="text-right min-w-0">
+                          <p className="text-[12px] font-semibold text-foreground truncate">{alert.device?.zone?.name ?? '미배정'}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">{deviceTitle(alert)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-muted-foreground">발생 시각</span>
+                        <span className="text-[11px] text-muted-foreground font-mono">{formatDateTime(alert.occurred_at)}</span>
+                      </div>
+                    </div>
+
+                    {alert.status === 'PENDING' && (
+                      <div className="mt-3 flex items-center gap-2 border-t border-border/50 pt-3" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => forward(alert.id)} disabled={update.isPending || bulkRunning} className="flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-2 text-[11px] font-bold text-white bg-primary hover:bg-primary-dark transition-colors disabled:opacity-50"><Send className="h-3 w-3" />전달</button>
+                        <button onClick={() => dismiss(alert.id)} disabled={update.isPending || bulkRunning} className="flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-2 text-[11px] font-bold text-destructive bg-destructive/10 hover:bg-destructive/20 transition-colors disabled:opacity-50"><XCircle className="h-3 w-3" />무시</button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-page/30">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 border-t border-border bg-page/30">
           <span className="text-[12px] text-muted-foreground">표시 <span className="font-bold text-foreground">{items.length}</span>개{listQuery.hasNextPage && ' (더 있음)'}</span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {activeTab === 'pending' && items.some((a) => a.status === 'PENDING') && (
               <>
                 <button onClick={() => setBulkConfirm('DISMISSED')} disabled={bulkRunning} className="rounded-xl px-3.5 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">표시분 종결</button>
@@ -599,7 +659,7 @@ export default function AlertCenterPage() {
       {/* 표시분 일괄 전달/종결 확인 모달 */}
       {bulkConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { if (!bulkRunning) setBulkConfirm(null) }}>
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-border" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
               <div className="mb-4 flex items-center gap-3">
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bulkConfirm === 'FORWARDED' ? 'bg-primary/10' : 'bg-muted'}`}>
@@ -615,7 +675,7 @@ export default function AlertCenterPage() {
                 {bulkConfirm === 'FORWARDED' ? '사용자에게 전달' : '종결'}하시겠습니까?
               </p>
             </div>
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-page/30">
+            <div className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-border bg-page/30">
               <button onClick={() => setBulkConfirm(null)} disabled={bulkRunning} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">취소</button>
               <button
                 onClick={async () => { const s = bulkConfirm; await bulk(s); setBulkConfirm(null) }}

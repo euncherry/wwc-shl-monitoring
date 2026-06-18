@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   Radio,
@@ -7,6 +8,8 @@ import {
   Cpu,
   Bell,
   LogOut,
+  Menu,
+  X,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -22,6 +25,7 @@ export function AdminHeader() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -30,7 +34,7 @@ export function AdminHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-white/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 sm:px-6">
         {/* ─── Left: Logo ─── */}
         <NavLink to="/admin" className="flex items-center gap-2.5 shrink-0">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
@@ -41,8 +45,8 @@ export function AdminHeader() {
           </span>
         </NavLink>
 
-        {/* ─── Center: Nav tabs ─── */}
-        <nav className="flex items-center gap-1 rounded-2xl bg-page p-1 mx-4">
+        {/* ─── Center: Nav tabs (desktop) ─── */}
+        <nav className="hidden lg:flex items-center gap-1 rounded-2xl bg-page p-1 mx-4">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -64,9 +68,6 @@ export function AdminHeader() {
 
         {/* ─── Right: Actions ─── */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Divider */}
-          <div className="mx-1 h-8 w-px bg-border" />
-
           {/* User */}
           {user && (
             <div className="flex items-center gap-2.5">
@@ -84,6 +85,9 @@ export function AdminHeader() {
             </div>
           )}
 
+          {/* Divider */}
+          <div className="mx-1 h-8 w-px bg-border" />
+
           {/* Logout */}
           <button
             onClick={handleLogout}
@@ -93,8 +97,47 @@ export function AdminHeader() {
           >
             <LogOut className="h-[18px] w-[18px]" />
           </button>
+
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="rounded-xl p-2.5 text-muted-foreground transition-colors hover:bg-white/60 hover:text-primary-dark lg:hidden"
+            aria-label={mobileOpen ? '메뉴 닫기' : '메뉴 열기'}
+            aria-expanded={mobileOpen}
+            title="메뉴"
+          >
+            {mobileOpen ? (
+              <X className="h-[18px] w-[18px]" />
+            ) : (
+              <Menu className="h-[18px] w-[18px]" />
+            )}
+          </button>
         </div>
       </div>
+
+      {/* ─── Mobile dropdown nav ─── */}
+      {mobileOpen && (
+        <nav className="lg:hidden border-t border-border bg-white/95 backdrop-blur-md px-4 py-3 space-y-1">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/admin'}
+              onClick={() => setMobileOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-[14px] font-semibold transition-all duration-200 ${
+                  isActive
+                    ? 'bg-page text-primary-dark shadow-sm'
+                    : 'text-muted-foreground hover:text-primary-dark hover:bg-page'
+                }`
+              }
+            >
+              <item.icon className="h-4 w-4" />
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </header>
   )
 }

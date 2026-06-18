@@ -78,11 +78,10 @@ export default function AdminDashboard() {
 
       {/* ─── Welcome Banner ─── */}
       <section
-        className="relative overflow-hidden rounded-2xl"
+        className="relative overflow-hidden rounded-2xl px-5 py-6 sm:px-10 sm:py-[1.875rem]"
         style={{
           background: 'color-mix(in srgb, #246BD1 20%, transparent)',
           minHeight: '11.75rem',
-          padding: '1.875rem 2.5rem',
         }}
       >
         <div className="relative z-10 max-w-xl">
@@ -95,7 +94,7 @@ export default function AdminDashboard() {
             3개의 미확인 알림이 있습니다.
           </p>
         </div>
-        <div className="absolute right-6 bottom-0 flex items-end" style={{ width: 'clamp(14rem, 25vw, 18rem)' }}>
+        <div className="absolute right-6 bottom-0 hidden sm:flex items-end" style={{ width: 'clamp(14rem, 25vw, 18rem)' }}>
           <img
             src={bannerImg}
             alt="히어링 루프 모니터링 일러스트"

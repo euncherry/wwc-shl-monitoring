@@ -672,7 +672,7 @@ function DeviceDetailModal({
           </div>
 
           {/* Info grid — 조회 전용 */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* 전원 — 실값(is_connected = connection_status !== OFFLINE) */}
             <div className="rounded-xl border border-border p-4">
               <span className="text-[12px] text-muted-foreground block mb-2">전원 상태</span>
@@ -768,7 +768,7 @@ function DeviceDetailModal({
         </div>
 
         {/* Footer — 삭제 / 닫기 (제어·저장 없음) */}
-        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-t border-border bg-page/30">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-6 py-4 border-t border-border bg-page/30">
           {confirmDelete ? (
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-semibold text-destructive">정말 삭제할까요?</span>
@@ -1059,7 +1059,7 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-border bg-page/30 px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-page/30 px-6 py-4">
           <button
             onClick={() => { setQuickMode((q) => !q); setError(''); setResult(null) }}
             className="text-[12px] font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
@@ -1146,14 +1146,14 @@ export default function HearingLoopsPage() {
   return (
     <div className="space-y-6">
       {/* ─── Page header ─── */}
-      <div className="flex items-end justify-between pb-5 pt-5">
+      <div className="flex flex-col gap-3 pb-3 pt-3 sm:flex-row sm:items-end sm:justify-between sm:pb-5 sm:pt-5">
         <div>
-          <h2 className="text-2xl font-black text-foreground tracking-tight">히어링루프 관리</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">히어링루프 관리</h2>
           <p className="text-sm text-muted-foreground mt-2">등록된 히어링루프를 조회하고 관리할 수 있습니다.</p>
         </div>
         <button
           onClick={() => setShowRegister(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary-dark px-4 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-primary-dark px-4 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors"
         >
           <Plus className="h-4 w-4" />
           히어링루프 등록
@@ -1162,7 +1162,7 @@ export default function HearingLoopsPage() {
 
       {/* ─── Search · Zone filter · Sort ─── */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="relative w-full sm:flex-1 sm:min-w-[240px] sm:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
@@ -1175,7 +1175,7 @@ export default function HearingLoopsPage() {
 
         <button
           onClick={() => setSortOrder(sortOrder === 'latest' ? 'oldest' : 'latest')}
-          className="flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowUpDown className="h-3.5 w-3.5" />
           {sortOrder === 'latest' ? '최신순' : '오래된순'}
@@ -1210,7 +1210,7 @@ export default function HearingLoopsPage() {
           })}
         </div>
 
-        <div className="overflow-x-auto scrollbar-thin">
+        <div className="hidden md:block overflow-x-auto scrollbar-thin">
           <table className="w-full">
             <thead>
               <tr className="bg-page/50 border-b border-border">
@@ -1326,6 +1326,101 @@ export default function HearingLoopsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* ─── Mobile cards (md 미만) ─── */}
+        <div className="md:hidden">
+          {isLoading ? (
+            <div className="flex flex-col items-center gap-2 px-5 py-16 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <p className="text-sm">기기 목록을 불러오는 중...</p>
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center gap-3 px-5 py-16">
+              <AlertCircle className="h-8 w-8 text-destructive/60" />
+              <p className="text-sm text-muted-foreground">목록을 불러오지 못했습니다.</p>
+              <button onClick={() => refetch()} className="rounded-lg bg-page px-3 py-1.5 text-[12px] font-semibold text-foreground hover:bg-border/50 transition-colors">
+                다시 시도
+              </button>
+            </div>
+          ) : filteredDevices.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-5 py-16">
+              <Radio className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">검색 결과가 없습니다.</p>
+            </div>
+          ) : (
+            <div className="space-y-3 p-4">
+              {filteredDevices.map((device) => {
+                const hasAlias = Boolean(device.alias?.trim())
+                return (
+                  <button
+                    key={device.id}
+                    onClick={() => setSelectedDevice(device)}
+                    className="flex w-full flex-col gap-3 rounded-xl border border-border bg-white p-4 text-left transition-colors hover:bg-main-blue-1/10"
+                  >
+                    {/* 타이틀 + 동작 상태 */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${!device.telecoilZoneId ? 'bg-warning/10' : 'bg-primary/10'}`}>
+                          {!device.telecoilZoneId ? <Package className="h-4 w-4 text-warning" /> : <Radio className="h-4 w-4 text-primary" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
+                          {hasAlias && <p className="truncate text-[11px] text-muted-foreground font-mono">{device.mac}</p>}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5" title={connectionMeta(device.connectionStatus).label}>
+                        {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
+                        <span className={`text-[11px] font-bold ${connectionMeta(device.connectionStatus).color}`}>{connectionMeta(device.connectionStatus).label}</span>
+                      </div>
+                    </div>
+
+                    {/* 텔레코일존 */}
+                    <div className="flex items-center gap-1.5 text-[12px]">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      {device.telecoilZoneName ? (
+                        <span className="font-semibold text-foreground">{device.telecoilZoneName}</span>
+                      ) : (
+                        <span className="font-semibold text-warning">미배정</span>
+                      )}
+                    </div>
+
+                    {/* 상태 칩 */}
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
+                        <PowerIcon on={device.power} />
+                        <span className="font-semibold text-foreground">{device.power ? 'ON' : 'OFF'}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
+                        <WifiSignalIcon signal={device.wifiSignal} />
+                        <span className="font-semibold text-foreground">{WIFI_SIGNAL_LABEL[device.wifiSignal]}</span>
+                        {device.wifiRssi != null && <span className="tabular-nums text-muted-foreground">{device.wifiRssi}dBm</span>}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
+                        <Thermometer className={`h-3.5 w-3.5 ${device.overTemperature ? 'text-destructive' : 'text-success'}`} />
+                        <span className={`font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>{device.overTemperature ? '과열' : '정상'}</span>
+                      </span>
+                    </div>
+
+                    {/* 펌웨어 + 최근 업데이트 */}
+                    <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-2.5 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
+                        <span className="text-muted-foreground">
+                          <span className="font-medium">WiFi</span>{' '}
+                          <span className="font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
+                          {' · '}
+                          <span className="font-medium">HL</span>{' '}
+                          <span className="font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-muted-foreground">{formatDateTime(device.lastUpdated)}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Table footer */}

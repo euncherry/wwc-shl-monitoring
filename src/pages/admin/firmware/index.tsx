@@ -569,7 +569,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-page/30 px-6 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-page/30 px-6 py-4">
           <span className="text-[12px] text-muted-foreground">
             {done ? (
               <>
@@ -631,13 +631,13 @@ export default function FirmwarePage() {
 
   return (
     <div className="space-y-6">
-      <div className="pb-5 pt-5">
-        <h2 className="text-2xl font-black text-foreground tracking-tight">펌웨어 관리</h2>
+      <div className="pb-3 pt-3 sm:pb-5 sm:pt-5">
+        <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">펌웨어 관리</h2>
         <p className="text-sm text-muted-foreground mt-2">펌웨어를 업로드하고 기기에 업데이트를 전송합니다.</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="relative w-full sm:flex-1 sm:min-w-[240px] sm:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
@@ -650,7 +650,7 @@ export default function FirmwarePage() {
         {/* 펌웨어 추가 — 원본 OTA 업데이트 버튼 디자인 재사용 */}
         <button
           onClick={() => setShowUpload(true)}
-          className="group relative ml-auto flex items-center gap-3 rounded-2xl border border-transparent pl-4 pr-5 py-2.5 text-[13px] font-bold text-primary-dark shadow-sm transition-all duration-300 cursor-pointer hover:shadow-[0_4px_16px_rgba(36,107,209,0.15)]"
+          className="group relative w-full sm:w-auto sm:ml-auto flex items-center gap-3 rounded-2xl border border-transparent pl-4 pr-5 py-2.5 text-[13px] font-bold text-primary-dark shadow-sm transition-all duration-300 cursor-pointer hover:shadow-[0_4px_16px_rgba(36,107,209,0.15)]"
           style={{ background: 'linear-gradient(135deg, #EDF1F8 0%, #D6E5F8 40%, #DDDAF8 75%, #EDE8F4 100%)' }}
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/70 shadow-sm transition-all">
@@ -671,65 +671,126 @@ export default function FirmwarePage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16"><Cpu className="h-8 w-8 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">{all.length === 0 ? '업로드된 펌웨어가 없습니다.' : '검색 결과가 없습니다.'}</p></div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">버전</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">HL 펌웨어</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi 펌웨어</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">변경 내역</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">업로드 일시</th>
-                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전송</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
+          <>
+            {/* 데스크톱: 테이블 */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">버전</th>
+                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">HL 펌웨어</th>
+                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi 펌웨어</th>
+                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">변경 내역</th>
+                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">업로드 일시</th>
+                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전송</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filtered.map((f) => (
+                    <tr key={f.id} className="transition-colors hover:bg-page/40">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10"><Cpu className="h-4 w-4 text-primary" /></div>
+                          <div className="leading-tight">
+                            <span className="font-mono text-[13px] font-bold text-foreground">v{f.version}</span>
+                            <span className="block text-[10px] text-muted-foreground">WiFi {f.wifiVersion || '—'} · HL {f.hlVersion || '—'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="flex items-center gap-1.5 font-mono text-[12px] text-foreground" title={f.hlS3Key}>
+                          <Cpu className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.hlS3Key) || <span className="text-muted-foreground">—</span>}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="flex items-center gap-1.5 font-mono text-[12px] text-foreground" title={f.wifiS3Key}>
+                          <Wifi className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.wifiS3Key) || <span className="text-muted-foreground">—</span>}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {f.updates.length > 0 ? (
+                          <ul className="space-y-0.5">
+                            {f.updates.map((u, i) => (
+                              <li key={i} className="text-[12px] text-foreground">{u}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-[13px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-[13px] text-muted-foreground">{formatDateTime(f.uploadedAt)}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => setSendTarget(f)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-[12px] font-bold text-white hover:bg-primary-dark transition-colors"
+                        >
+                          <Send className="h-3.5 w-3.5" />업데이트 전송
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 모바일: 카드 */}
+            <div className="md:hidden space-y-3 p-4">
               {filtered.map((f) => (
-                <tr key={f.id} className="transition-colors hover:bg-page/40">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10"><Cpu className="h-4 w-4 text-primary" /></div>
-                      <div className="leading-tight">
-                        <span className="font-mono text-[13px] font-bold text-foreground">v{f.version}</span>
-                        <span className="block text-[10px] text-muted-foreground">WiFi {f.wifiVersion || '—'} · HL {f.hlVersion || '—'}</span>
-                      </div>
+                <div key={f.id} className="rounded-xl border border-border bg-white p-4 shadow-sm">
+                  {/* 버전 헤더 */}
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10"><Cpu className="h-4 w-4 text-primary" /></div>
+                    <div className="leading-tight">
+                      <span className="font-mono text-[14px] font-bold text-foreground">v{f.version}</span>
+                      <span className="block text-[10px] text-muted-foreground">WiFi {f.wifiVersion || '—'} · HL {f.hlVersion || '—'}</span>
                     </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="flex items-center gap-1.5 font-mono text-[12px] text-foreground" title={f.hlS3Key}>
-                      <Cpu className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.hlS3Key) || <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="flex items-center gap-1.5 font-mono text-[12px] text-foreground" title={f.wifiS3Key}>
-                      <Wifi className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.wifiS3Key) || <span className="text-muted-foreground">—</span>}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {f.updates.length > 0 ? (
-                      <ul className="space-y-0.5">
-                        {f.updates.map((u, i) => (
-                          <li key={i} className="text-[12px] text-foreground">{u}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <span className="text-[13px] text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="text-[13px] text-muted-foreground">{formatDateTime(f.uploadedAt)}</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button
-                      onClick={() => setSendTarget(f)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-[12px] font-bold text-white hover:bg-primary-dark transition-colors"
-                    >
-                      <Send className="h-3.5 w-3.5" />업데이트 전송
-                    </button>
-                  </td>
-                </tr>
+                  </div>
+
+                  {/* 필드 스택 */}
+                  <div className="mt-3 space-y-2.5">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">HL 펌웨어</p>
+                      <span className="mt-0.5 flex items-center gap-1.5 break-all font-mono text-[12px] text-foreground" title={f.hlS3Key}>
+                        <Cpu className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.hlS3Key) || <span className="text-muted-foreground">—</span>}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi 펌웨어</p>
+                      <span className="mt-0.5 flex items-center gap-1.5 break-all font-mono text-[12px] text-foreground" title={f.wifiS3Key}>
+                        <Wifi className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{fileName(f.wifiS3Key) || <span className="text-muted-foreground">—</span>}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">변경 내역</p>
+                      {f.updates.length > 0 ? (
+                        <ul className="mt-0.5 space-y-0.5">
+                          {f.updates.map((u, i) => (
+                            <li key={i} className="text-[12px] text-foreground">{u}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-[13px] text-muted-foreground">—</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">업로드 일시</p>
+                      <span className="mt-0.5 block text-[13px] text-muted-foreground">{formatDateTime(f.uploadedAt)}</span>
+                    </div>
+                  </div>
+
+                  {/* 액션 */}
+                  <button
+                    onClick={() => setSendTarget(f)}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2.5 text-[12px] font-bold text-white hover:bg-primary-dark transition-colors"
+                  >
+                    <Send className="h-3.5 w-3.5" />업데이트 전송
+                  </button>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
 
         <div className="flex items-center justify-between border-t border-border bg-page/30 px-5 py-3">

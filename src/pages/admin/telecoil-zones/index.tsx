@@ -220,7 +220,7 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
               <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
               사용자 모드 계정 생성
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input
                 type="text"
                 placeholder="사용자 ID"
@@ -248,7 +248,7 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-page/30 px-6 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border bg-page/30 px-6 py-4">
           <button onClick={onClose} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">취소</button>
           <button
             onClick={submit}
@@ -447,7 +447,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
         ) : (
           <>
             {/* Summary stats — 가동률(online) */}
-            <div className="grid shrink-0 grid-cols-3 gap-4 border-b border-border px-6 py-4">
+            <div className="grid shrink-0 grid-cols-1 sm:grid-cols-3 gap-4 border-b border-border px-6 py-4">
               <div className="rounded-xl border border-border p-3">
                 <span className="text-[11px] text-muted-foreground">전체 장비</span>
                 <div className="mt-1 flex items-center gap-2"><Radio className="h-4 w-4 text-primary" /><span className="text-lg font-bold text-foreground">{zone.deviceCount}</span></div>
@@ -558,7 +558,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                   </div>
                 ) : creatingAccount ? (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <input placeholder="이메일" value={acct.email} onChange={(e) => setAcct({ ...acct, email: e.target.value })} className="rounded-lg border border-border bg-white px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-primary/20" />
                       <input placeholder="아이디" value={acct.username} onChange={(e) => setAcct({ ...acct, username: e.target.value })} className="rounded-lg border border-border bg-white px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-primary/20" />
                       <input type="password" placeholder="비밀번호" value={acct.password} onChange={(e) => setAcct({ ...acct, password: e.target.value })} className="rounded-lg border border-border bg-white px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -586,7 +586,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                 {devices.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8"><Radio className="h-7 w-7 text-muted-foreground/30" /><p className="text-[13px] text-muted-foreground">배정된 히어링루프가 없습니다.</p></div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {devices.map((d) => (
                       <div key={d.id} className="rounded-xl border border-border bg-page/30 p-4">
                         <div className="mb-3 flex items-center justify-between">
@@ -623,9 +623,9 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
             </div>
 
             {/* Footer */}
-            <div className="flex shrink-0 items-center justify-between border-t border-border bg-page/30 px-6 py-4">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-page/30 px-6 py-4">
               {confirmDelete ? (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[12px] font-semibold text-destructive">{zone.userAccount ? '계정도 함께 삭제됩니다. 삭제할까요?' : '존을 삭제할까요?'}</span>
                   <button onClick={handleDeleteZone} disabled={deleteUser.isPending || deleteZone.isPending} className="flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-[12px] font-bold text-white hover:bg-destructive/90 disabled:opacity-50">{(deleteUser.isPending || deleteZone.isPending) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}삭제</button>
                   <button onClick={() => setConfirmDelete(false)} className="rounded-lg px-3 py-1.5 text-[12px] font-semibold text-muted-foreground hover:bg-page">취소</button>
@@ -715,14 +715,14 @@ export default function TelecoilZonesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between pb-5 pt-5">
+      <div className="flex flex-col gap-3 pb-5 pt-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-black text-foreground tracking-tight">텔레코일존 관리</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">텔레코일존 관리</h2>
           <p className="text-sm text-muted-foreground mt-2">텔레코일존을 등록하고 배치된 히어링루프를 관리합니다.</p>
         </div>
         <button
           onClick={() => setShowRegister(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary-dark px-4 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-primary-dark px-4 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors"
         >
           <Plus className="h-4 w-4" />
           텔레코일존 등록
@@ -730,19 +730,19 @@ export default function TelecoilZonesPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="relative w-full flex-1 sm:min-w-[240px] sm:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input type="text" placeholder="텔레코일존명, 담당자 이메일 검색..." value={search} onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-4 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
         </div>
-        <button onClick={() => setSortOrder(sortOrder === 'latest' ? 'oldest' : 'latest')} className="flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => setSortOrder(sortOrder === 'latest' ? 'oldest' : 'latest')} className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors">
           <ArrowUpDown className="h-3.5 w-3.5" />{sortOrder === 'latest' ? '최신순' : '오래된순'}
         </button>
       </div>
 
       <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
         {/* Status filter */}
-        <div className="flex items-center gap-1 border-b border-border px-5 pb-3 pt-4">
+        <div className="flex flex-wrap items-center gap-1 border-b border-border px-5 pb-3 pt-4">
           {(['all', 'active', 'warning', 'inactive'] as const).map((s) => {
             const labels: Record<string, string> = { all: '전체', active: '정상', warning: '주의', inactive: '비활성' }
             const dotColors: Record<string, string> = { all: 'bg-primary', active: 'bg-success', warning: 'bg-warning', inactive: 'bg-muted-foreground' }
@@ -778,7 +778,7 @@ export default function TelecoilZonesPage() {
           ) : filteredZones.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-16"><Building2 className="h-8 w-8 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">검색 결과가 없습니다.</p></div>
           ) : (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredZones.map((zone) => {
                 const rate = zone.deviceCount > 0 ? Math.round((zone.activeDeviceCount / zone.deviceCount) * 100) : 0
                 const rateColor = rate === 100 ? 'bg-success' : rate >= 80 ? 'bg-primary' : rate >= 60 ? 'bg-warning' : 'bg-destructive'
