@@ -176,6 +176,29 @@ export interface DeviceErrorLog {
   created_at: string
 }
 
+/** GET /devices/:mac/device-logs — 기기 디바이스 로그 레벨 */
+export type DeviceLogLevel = 'UNSPECIFIED' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
+
+/** GET /devices/:mac/device-logs — 단건 로그 항목 */
+export interface DeviceLogDto {
+  id: number
+  mac_address: string
+  level: DeviceLogLevel
+  module: string
+  message: string
+  context: string | null
+  received_at: string
+  created_at: string
+}
+
+/** GET /devices/:mac/device-logs — 페이지네이션 응답 */
+export interface DeviceLogPageDto {
+  data: DeviceLogDto[]
+  total: number
+  page: number
+  limit: number
+}
+
 export type ZoneStatus = 'active' | 'warning' | 'inactive'
 
 export interface TelecoilZone {

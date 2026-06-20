@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { DeviceApiResponse, BulkCreateResult, StatusLogPageDto, DevicePageDto, DeviceErrorLog } from '@/types/device'
+import type { DeviceApiResponse, BulkCreateResult, StatusLogPageDto, DevicePageDto, DeviceErrorLog, DeviceLogPageDto } from '@/types/device'
 
 /** POST /devices, /devices/bulk 입력 (CreateDeviceDto) */
 export interface CreateDeviceInput {
@@ -69,6 +69,15 @@ export const devicesApi = {
   getErrors: async (mac: string): Promise<DeviceErrorLog[]> => {
     const { data } = await apiClient.get<DeviceErrorLog[]>(
       `/devices/${encodeURIComponent(mac)}/errors`,
+    )
+    return data
+  },
+
+  /** GET /devices/:mac/device-logs — 기기 디바이스 로그(페이지네이션, module 필터) */
+  getDeviceLogs: async (mac: string, page = 1, limit = 20, module?: string): Promise<DeviceLogPageDto> => {
+    const { data } = await apiClient.get<DeviceLogPageDto>(
+      `/devices/${encodeURIComponent(mac)}/device-logs`,
+      { params: { page, limit, ...(module ? { module } : {}) } },
     )
     return data
   },

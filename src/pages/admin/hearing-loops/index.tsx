@@ -33,7 +33,7 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import type { HearingLoop, DeviceStatusLogDto } from '@/types/device'
+import type { HearingLoop, DeviceStatusLogDto, DeviceLogDto, DeviceLogLevel } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
@@ -45,6 +45,7 @@ import {
   useAssignZone,
   useDeviceStatusLogs,
   useDeviceErrors,
+  useDeviceLogs,
 } from '@/hooks/useDevices'
 import { useDeviceUpdateSessions, useUpdateSessionDetail } from '@/hooks/useFirmware'
 import { useAlerts } from '@/hooks/useAlerts'
@@ -68,7 +69,33 @@ function useLockBodyScroll() {
 
 /* ── 기기 이력 (알림 REAL / 상태 REAL / 업데이트 REAL / 에러 REAL / 전체 합본) ── */
 
-type HistoryTab = 'alerts' | 'status' | 'updates' | 'errors' | 'all'
+type HistoryTab = 'alerts' | 'status' | 'updates' | 'errors' | 'logs' | 'all'
+
+type LogModuleFilter = 'all' | 'wifi' | 'hl'
+
+const LOG_LEVEL_META: Record<DeviceLogLevel, { label: string; cls: string }> = {
+  UNSPECIFIED: { label: 'LOG',   cls: 'bg-muted text-muted-foreground' },
+  DEBUG:       { label: 'DEBUG', cls: 'bg-muted text-muted-foreground' },
+  INFO:        { label: 'INFO',  cls: 'bg-primary/10 text-primary' },
+  WARN:        { label: 'WARN',  cls: 'bg-warning/10 text-warning' },
+  ERROR:       { label: 'ERROR', cls: 'bg-destructive/10 text-destructive' },
+}
+
+function DeviceLogRow({ log }: { log: DeviceLogDto }) {
+  const meta = LOG_LEVEL_META[log.level] ?? LOG_LEVEL_META.UNSPECIFIED
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-border bg-white px-4 py-3 text-[12px]">
+      <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${meta.cls}`}>
+        {meta.label}
+      </span>
+      <span className="shrink-0 rounded bg-page px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
+        {log.module}
+      </span>
+      <span className="min-w-0 flex-1 break-all text-foreground">{log.message}</span>
+      <span className="shrink-0 text-muted-foreground">{formatDateTime(log.received_at)}</span>
+    </div>
+  )
+}
 
 function priorityStyle(p: AlertPriorityEnum) {
   if (p === 'CRITICAL') return { dot: 'bg-destructive', box: 'border-destructive/20 bg-destructive/5' }
@@ -268,37 +295,52 @@ function UpdateSessionDetailModal({ sessionId, onClose }: { sessionId: number; o
   )
 }
 
+const LOG_LIMIT = 20
+
 function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   const [tab, setTab] = useState<HistoryTab>('alerts')
   const [updatePage, setUpdatePage] = useState(1)
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null)
+  const [logPage, setLogPage] = useState(1)
+  const [logModule, setLogModule] = useState<LogModuleFilter>('all')
 
   const alertsQ = useAlerts({ device_id: deviceId, limit: 20 })
   const statusQ = useDeviceStatusLogs(mac, 1, 20)
   const updatesQ = useDeviceUpdateSessions(mac, updatePage, 10)
   const errorsQ = useDeviceErrors(mac)
+  const logsQ = useDeviceLogs(
+    mac,
+    logPage,
+    LOG_LIMIT,
+    logModule === 'all' ? undefined : logModule,
+    tab === 'logs',
+  )
 
   const alerts = alertsQ.data?.items ?? []
-  const logs = statusQ.data?.data ?? []
+  const statusLogs = statusQ.data?.data ?? []
   const sessions = updatesQ.data?.data ?? []
   const sessionTotal = updatesQ.data?.total ?? 0
   const errors = errorsQ.data ?? []
+  const deviceLogs = logsQ.data?.data ?? []
+  const deviceLogsTotal = logsQ.data?.total ?? 0
 
   const sessionTotalPages = Math.ceil(sessionTotal / 10)
+  const logTotalPages = Math.ceil(deviceLogsTotal / LOG_LIMIT)
 
   const merged = useMemo(() => {
     const items = [
       ...alerts.map((a) => ({ kind: 'alert' as const, ts: a.occurred_at, a })),
-      ...logs.map((s) => ({ kind: 'status' as const, ts: s.reported_at, s })),
+      ...statusLogs.map((s) => ({ kind: 'status' as const, ts: s.reported_at, s })),
     ]
     return items.sort((x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime())
-  }, [alerts, logs])
+  }, [alerts, statusLogs])
 
   const tabs: { key: HistoryTab; label: string; count: number }[] = [
     { key: 'alerts', label: '알림 이력', count: alerts.length },
-    { key: 'status', label: '상태 이력', count: logs.length },
+    { key: 'status', label: '상태 이력', count: statusLogs.length },
     { key: 'updates', label: '업데이트 이력', count: sessionTotal },
     { key: 'errors', label: '에러 로그', count: errors.length },
+    { key: 'logs', label: '디바이스 로그', count: deviceLogsTotal },
     { key: 'all', label: '전체보기', count: merged.length },
   ]
 
@@ -307,6 +349,7 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
     : tab === 'alerts' ? alertsQ.isLoading
     : tab === 'updates' ? updatesQ.isLoading
     : tab === 'errors' ? errorsQ.isLoading
+    : tab === 'logs' ? logsQ.isLoading
     : alertsQ.isLoading || statusQ.isLoading
 
   const isError =
@@ -314,7 +357,14 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
     : tab === 'alerts' ? alertsQ.isError
     : tab === 'updates' ? updatesQ.isError
     : tab === 'errors' ? errorsQ.isError
+    : tab === 'logs' ? logsQ.isError
     : alertsQ.isError || statusQ.isError
+
+  const moduleFilterBtns: { key: LogModuleFilter; label: string }[] = [
+    { key: 'all', label: '전체' },
+    { key: 'wifi', label: 'WiFi' },
+    { key: 'hl', label: 'HL' },
+  ]
 
   return (
     <div>
@@ -336,6 +386,25 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
         ))}
       </div>
 
+      {/* 디바이스 로그 모듈 필터 */}
+      {tab === 'logs' && (
+        <div className="mb-3 flex items-center gap-1.5">
+          {moduleFilterBtns.map((btn) => (
+            <button
+              key={btn.key}
+              onClick={() => { setLogModule(btn.key); setLogPage(1) }}
+              className={`rounded-lg border px-3 py-1 text-[11px] font-bold transition-all ${
+                logModule === btn.key
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'
+              }`}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /><span className="text-[12px]">불러오는 중…</span>
@@ -345,7 +414,7 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
       ) : tab === 'alerts' ? (
         alerts.length ? <div className="space-y-2">{alerts.map((a) => <AlertRow key={a.id} a={a} />)}</div> : <HistoryEmpty text="알림 이력이 없습니다." />
       ) : tab === 'status' ? (
-        logs.length ? <div className="space-y-2">{logs.map((s) => <StatusRow key={s.id} s={s} />)}</div> : <HistoryEmpty text="상태 이력이 없습니다." />
+        statusLogs.length ? <div className="space-y-2">{statusLogs.map((s) => <StatusRow key={s.id} s={s} />)}</div> : <HistoryEmpty text="상태 이력이 없습니다." />
       ) : tab === 'updates' ? (
         <>
           {sessions.length === 0 ? (
@@ -409,6 +478,41 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
             ))}
           </div>
         )
+      ) : tab === 'logs' ? (
+        <>
+          {deviceLogs.length === 0 ? (
+            <HistoryEmpty text="디바이스 로그가 없습니다." />
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                {deviceLogs.map((log) => (
+                  <DeviceLogRow key={log.id} log={log} />
+                ))}
+              </div>
+
+              {/* 디바이스 로그 페이지네이션 */}
+              {logTotalPages > 1 && (
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setLogPage((p) => Math.max(1, p - 1))}
+                    disabled={logPage === 1}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="text-[12px] text-muted-foreground">{logPage} / {logTotalPages}</span>
+                  <button
+                    onClick={() => setLogPage((p) => Math.min(logTotalPages, p + 1))}
+                    disabled={logPage === logTotalPages}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </>
       ) : merged.length ? (
         <div className="space-y-2">
           {merged.map((m) => (m.kind === 'alert' ? <AlertRow key={`a${m.a.id}`} a={m.a} /> : <StatusRow key={`s${m.s.id}`} s={m.s} />))}
