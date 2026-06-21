@@ -36,6 +36,7 @@ import {
 } from '@/hooks/useZones'
 import { useCreateUser, useUpdateUser, useDeleteUser } from '@/hooks/useUsers'
 import { useDevices, useAssignZone, useUnassignZone } from '@/hooks/useDevices'
+import { DeviceDetailModal } from '@/pages/admin/hearing-loops'
 import { useAlerts } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 
@@ -361,6 +362,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
   const [unassignTarget, setUnassignTarget] = useState<HearingLoop | null>(null)
+  const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
   const [actionError, setActionError] = useState('')
 
   const zone = data?.zone
@@ -425,6 +427,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -588,7 +591,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {devices.map((d) => (
-                      <div key={d.id} className="rounded-xl border border-border bg-page/30 p-4">
+                      <div key={d.id} onClick={() => setSelectedDevice(d)} title="기기 상세 보기" className="cursor-pointer rounded-xl border border-border bg-page/30 p-4 transition-colors hover:border-primary/40 hover:bg-primary/5">
                         <div className="mb-3 flex items-center justify-between">
                           <div className="flex min-w-0 items-center gap-2.5">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10"><Radio className="h-4 w-4 text-primary" /></div>
@@ -597,7 +600,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                               {d.alias?.trim() && <p className="truncate font-mono text-[10px] text-muted-foreground">{d.mac}</p>}
                             </div>
                           </div>
-                          <button onClick={() => { setActionError(''); setUnassignTarget(d) }} disabled={unassign.isPending} title="배정 해제" className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"><X className="h-4 w-4" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); setActionError(''); setUnassignTarget(d) }} disabled={unassign.isPending} title="배정 해제" className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"><X className="h-4 w-4" /></button>
                         </div>
                         <div className="grid grid-cols-4 gap-2">
                           <div className="flex flex-col items-center gap-1 rounded-lg border border-border/30 bg-white/60 py-2"><PowerIcon on={d.power} /><span className="text-[10px] text-muted-foreground">전원</span></div>
@@ -675,6 +678,8 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
         </div>
       )}
     </div>
+    {selectedDevice && <DeviceDetailModal device={selectedDevice} onClose={() => setSelectedDevice(null)} />}
+    </>
   )
 }
 
