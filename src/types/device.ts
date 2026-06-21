@@ -1,3 +1,5 @@
+import type { FirmwareResponseDto } from './firmware'
+
 export type DeviceStatus = 'normal' | 'warning' | 'error' | 'offline'
 
 /** Wi-Fi 신호 강도 (RSSI 기반, REAL — 백엔드 3f1f93a). STRONG≥-55 / FAIR≥-67 / WEAK<-67 / DISCONNECTED=미수신·끊김 */
@@ -29,6 +31,8 @@ export interface HearingLoop {
   temperature: number
   volume: number
   firmwareVersion: string
+  /** 설치된 펌웨어 세트(번들) 객체 — develop firmware. null/undefined=설치 이력 없음. firmwareVersion은 이 객체의 version. */
+  installedFirmware?: FirmwareResponseDto | null
   /** ESP32 WiFi MCU 펌웨어 버전 */
   wifiFirmwareVersion: string | null
   /** Nordic NRF HL MCU 펌웨어 버전 */
@@ -80,8 +84,8 @@ export interface DeviceResponseDto {
   /** 온도 °C. ⚠️ 무의미 — 기기에 온도 센서 없음(고정/시드값). 고온 여부는 last_gpio_state(과열 경보)로 판단. */
   last_temperature: number | null
   last_seen_at: string | null
-  /** ESP32 펌웨어 버전 (REAL — HelloRequest 수신 시 갱신) */
-  firmware_version: string | null
+  /** 현재 설치된 펌웨어 세트(번들) 객체. 마지막 완료 설치 기준(firmware_version·firmware_id 대체 — develop 579ea6b). */
+  firmware: FirmwareResponseDto | null
   /** ESP32 WiFi MCU 펌웨어 버전 */
   wifi_firmware_version: string | null
   /** Nordic NRF HL MCU 펌웨어 버전 */
