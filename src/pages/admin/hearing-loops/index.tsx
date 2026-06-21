@@ -918,6 +918,38 @@ interface DraftEntry { mac: string; zoneId: string; alias: string }
 
 const ALIAS_MAX = 30
 
+/* ── MAC 주소 형식 강제·정규화 ──
+   표준형 = 두 자리씩 6쌍 · 콜론 구분 · 대문자 · 공백 없음 (AA:BB:CC:DD:EE:FF).
+   백엔드는 MAC을 검증·정규화하지 않고 그대로 저장하며, 기기가 보고하는 MAC과
+   정확히 일치해야 매칭되므로 FE에서 표준형을 강제한다. */
+const MAC_CANONICAL = /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/
+
+type MacStatus = 'ok' | 'fixable' | 'invalid'
+interface MacCheck {
+  /** ok=표준형 / fixable=정규화 가능(콜론·공백·대소문자) / invalid=교정 불가(16진수 12자리 아님) */
+  status: MacStatus
+  /** 표준형 결과 (ok·fixable일 때) */
+  canonical: string | null
+  /** 어떤 보정이 필요한지 (예: ['공백 제거', '대문자로', '콜론으로 구분']) */
+  reasons: string[]
+}
+
+function checkMac(raw: string): MacCheck {
+  const trimmed = raw.trim()
+  if (MAC_CANONICAL.test(trimmed)) return { status: 'ok', canonical: trimmed, reasons: [] }
+
+  const hex = trimmed.replace(/[^0-9a-fA-F]/g, '')
+  if (hex.length !== 12) return { status: 'invalid', canonical: null, reasons: [] }
+
+  const canonical = (hex.toUpperCase().match(/.{2}/g) as string[]).join(':')
+  const reasons: string[] = []
+  if (/\s/.test(trimmed)) reasons.push('공백 제거')
+  if (/[a-f]/.test(trimmed)) reasons.push('대문자로')
+  if (!/^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/.test(trimmed.replace(/\s/g, ''))) reasons.push('콜론으로 구분')
+  if (reasons.length === 0) reasons.push('형식 정리')
+  return { status: 'fixable', canonical, reasons }
+}
+
 /** 입력 필드 카드 (아이콘 · 제목/설명 · 입력) — 등록 폼 공통 레이아웃 */
 function FieldRow({
   icon,
@@ -974,8 +1006,12 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
     setError('')
     const m = mac.trim()
     if (!m) { setError('MAC 주소를 입력해주세요.'); return }
-    if (entries.some((e) => e.mac.toLowerCase() === m.toLowerCase())) { setError('이미 추가된 MAC 주소입니다.'); return }
-    setEntries((prev) => [...prev, { mac: m, zoneId, alias: alias.trim() }])
+    const c = checkMac(m)
+    if (c.status === 'invalid') { setError('올바른 MAC 주소 형식이 아니에요 (16진수 12자리).'); return }
+    if (c.status === 'fixable') { setError('MAC 형식을 표준형으로 먼저 맞춰주세요.'); return }
+    const canonical = c.canonical as string
+    if (entries.some((e) => e.mac === canonical)) { setError('이미 추가된 MAC 주소입니다.'); return }
+    setEntries((prev) => [...prev, { mac: canonical, zoneId, alias: alias.trim() }])
     setMac(''); setZoneId(''); setAlias('')
   }
 
@@ -987,22 +1023,38 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
     ...(e.alias ? { alias: e.alias } : {}),
   })
 
-  // 폼에 입력 중이고 아직 추가 안 한 MAC도 등록에 포함(단건 편의)
+  // 입력 중인 MAC의 형식 검사 (단일 모드 인라인 안내·정규화 제안)
+  const macCheck = mac.trim() ? checkMac(mac) : null
+  // 폼에 입력 중이고 아직 추가 안 한 MAC도 등록에 포함(단건 편의) — 표준형일 때만
   const pendingForm: DraftEntry | null =
-    !quickMode && mac.trim() && !entries.some((e) => e.mac.toLowerCase() === mac.trim().toLowerCase())
-      ? { mac: mac.trim(), zoneId, alias: alias.trim() }
+    !quickMode && macCheck?.status === 'ok' && !entries.some((e) => e.mac === macCheck.canonical)
+      ? { mac: macCheck.canonical as string, zoneId, alias: alias.trim() }
       : null
   const registerCount = quickMode ? 0 : entries.length + (pendingForm ? 1 : 0)
+
+  // 일괄(quick) 입력 줄별 검사 — 줄바꿈·쉼표로 분리(줄 안의 공백 등은 정규화로 흡수)
+  const bulkLines = bulkText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+  const bulkChecks = bulkLines.map((l) => ({ raw: l, ...checkMac(l) }))
+  const bulkFixable = bulkChecks.filter((c) => c.status === 'fixable')
+  const bulkInvalid = bulkChecks.filter((c) => c.status === 'invalid')
+  const bulkOkCount = bulkChecks.filter((c) => c.status === 'ok').length
+  const tidyBulk = () =>
+    setBulkText(bulkChecks.map((c) => (c.status === 'invalid' ? c.raw : (c.canonical as string))).join('\n'))
 
   const submit = () => {
     setError('')
     setResult(null)
     let list: CreateDeviceInput[]
     if (quickMode) {
-      const macs = Array.from(new Set(bulkText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)))
-      if (macs.length === 0) { setError('MAC 주소를 한 줄에 하나씩 입력해주세요.'); return }
+      if (bulkLines.length === 0) { setError('MAC 주소를 한 줄에 하나씩 입력해주세요.'); return }
+      if (bulkInvalid.length > 0) { setError('형식이 잘못된 MAC이 있어요. 16진수 12자리로 수정해주세요.'); return }
+      if (bulkFixable.length > 0) { setError("'표준형으로 정리'를 눌러 형식을 맞춘 뒤 등록해주세요."); return }
+      const macs = Array.from(new Set(bulkChecks.map((c) => c.canonical as string)))
       list = macs.map((m) => ({ mac_address: m }))
     } else {
+      if (mac.trim() && macCheck?.status !== 'ok') {
+        setError('입력한 MAC을 표준형으로 맞추거나 비운 뒤 등록해주세요.'); return
+      }
       const allEntries = pendingForm ? [...entries, pendingForm] : entries
       if (allEntries.length === 0) { setError('등록할 기기를 추가해주세요.'); return }
       list = allEntries.map(toInput)
@@ -1046,6 +1098,35 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
                 className="w-full resize-none rounded-lg border border-border bg-white px-3 py-2.5 text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
               <p className="mt-1.5 text-[11px] text-muted-foreground">텔레코일존·별칭 없이 MAC 주소만 일괄 등록합니다(미배정).</p>
+              {bulkLines.length > 0 && (bulkFixable.length > 0 || bulkInvalid.length > 0) && (
+                <div className="mt-2 space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                      표준형 {bulkOkCount} · 정리 필요 {bulkFixable.length}{bulkInvalid.length > 0 ? ` · 오류 ${bulkInvalid.length}` : ''}
+                    </p>
+                    {bulkFixable.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={tidyBulk}
+                        className="flex shrink-0 items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-destructive/90"
+                      >
+                        <Check className="h-3.5 w-3.5" /> 표준형으로 정리
+                      </button>
+                    )}
+                  </div>
+                  {bulkInvalid.length > 0 && (
+                    <p className="text-[11px] text-destructive">
+                      형식 오류(수정 필요): <span className="font-mono">{bulkInvalid.map((c) => c.raw).join(', ')}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+              {bulkLines.length > 0 && bulkFixable.length === 0 && bulkInvalid.length === 0 && (
+                <p className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold text-success">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {bulkOkCount}개 모두 올바른 형식이에요
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -1056,16 +1137,47 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
                 title="MAC 주소"
                 badge={<span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">필수</span>}
               >
-                <input
-                  type="text"
-                  value={mac}
-                  onChange={(e) => setMac(e.target.value)}
-                  placeholder="AA:BB:CC:DD:EE:FF"
-                  autoFocus
-                  disabled={isPending}
-                  className="w-full rounded-lg border border-border bg-white px-3.5 py-2.5 text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  onKeyDown={(e) => { if (e.key === 'Enter') addEntry() }}
-                />
+                <>
+                  <input
+                    type="text"
+                    value={mac}
+                    onChange={(e) => setMac(e.target.value)}
+                    placeholder="AA:BB:CC:DD:EE:FF"
+                    autoFocus
+                    disabled={isPending}
+                    className={`w-full rounded-lg border bg-white px-3.5 py-2.5 text-[13px] font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
+                      macCheck && macCheck.status !== 'ok'
+                        ? 'border-destructive focus:ring-destructive/20 focus:border-destructive'
+                        : 'border-border focus:ring-primary/20 focus:border-primary'
+                    }`}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addEntry() }}
+                  />
+                  {macCheck?.status === 'fixable' && (
+                    <div className="mt-2 flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="flex items-center gap-1.5 text-[12px] text-foreground">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                        <span>{macCheck.reasons.join(' · ')} 해야 하는 거 아니에요? → <span className="font-mono font-bold">{macCheck.canonical}</span></span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setMac(macCheck.canonical as string)}
+                        className="flex shrink-0 items-center justify-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-destructive/90"
+                      >
+                        <Check className="h-3.5 w-3.5" /> 이렇게 바꾸기
+                      </button>
+                    </div>
+                  )}
+                  {macCheck?.status === 'invalid' && (
+                    <p className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold text-destructive">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" /> 올바른 MAC 형식이 아니에요 — 16진수 12자리 (AA:BB:CC:DD:EE:FF)
+                    </p>
+                  )}
+                  {macCheck?.status === 'ok' && (
+                    <p className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold text-success">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> 올바른 형식이에요
+                    </p>
+                  )}
+                </>
               </FieldRow>
 
               {/* 텔레코일존 */}
