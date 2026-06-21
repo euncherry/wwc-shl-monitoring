@@ -23,6 +23,7 @@ import {
   Thermometer,
   Cpu,
   Info,
+  RefreshCw,
 } from 'lucide-react'
 import type { ZoneStatus, HearingLoop } from '@/types/device'
 import { WifiSignalIcon } from '@/components/WifiSignalIcon'
@@ -37,6 +38,7 @@ import {
 import { useCreateUser, useUpdateUser, useDeleteUser } from '@/hooks/useUsers'
 import { useDevices, useAssignZone, useUnassignZone } from '@/hooks/useDevices'
 import { DeviceDetailModal } from '@/pages/admin/hearing-loops'
+import { OtaUpdateModal } from '@/pages/admin/hearing-loops/OtaUpdateModal'
 import { useAlerts } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 
@@ -363,6 +365,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
   const [showAssign, setShowAssign] = useState(false)
   const [unassignTarget, setUnassignTarget] = useState<HearingLoop | null>(null)
   const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
+  const [showOta, setShowOta] = useState(false)
   const [actionError, setActionError] = useState('')
 
   const zone = data?.zone
@@ -636,7 +639,13 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
               ) : (
                 <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-destructive hover:bg-destructive/5 transition-colors"><Trash2 className="h-4 w-4" />텔레코일존 삭제</button>
               )}
-              <button onClick={onClose} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">닫기</button>
+              <button
+                onClick={() => setShowOta(true)}
+                disabled={devices.length === 0}
+                className="flex items-center gap-2 rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-primary-dark/90 disabled:opacity-40"
+              >
+                <RefreshCw className="h-4 w-4" /> 펌웨어 업데이트
+              </button>
             </div>
           </>
         )}
@@ -679,6 +688,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
       )}
     </div>
     {selectedDevice && <DeviceDetailModal device={selectedDevice} onClose={() => setSelectedDevice(null)} />}
+    {showOta && <OtaUpdateModal macs={devices.map((d) => d.mac)} zoneName={zone?.name} onClose={() => setShowOta(false)} />}
     </>
   )
 }

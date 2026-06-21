@@ -29,10 +29,13 @@ import {
   Star,
   Check,
   Clock,
+  Cpu,
   ChevronDown,
   RefreshCw,
   ChevronLeft,
+  Download,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { HearingLoop, DeviceStatusLogDto, DeviceLogDto, DeviceLogLevel } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
@@ -48,10 +51,11 @@ import {
   useDeviceErrors,
   useDeviceLogs,
 } from '@/hooks/useDevices'
-import { useDeviceUpdateSessions, useUpdateSessionDetail } from '@/hooks/useFirmware'
+import { useDeviceUpdateSessions, useUpdateSessionDetail, useFirmwares } from '@/hooks/useFirmware'
 import { useAlerts } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 import { useZones } from '@/hooks/useZones'
+import { OtaUpdateModal } from './OtaUpdateModal'
 import type { CreateDeviceInput } from '@/api/devices'
 import type { UpdateSessionDto } from '@/types/firmware'
 
@@ -566,6 +570,32 @@ function ProvisioningBadge() {
   )
 }
 
+/** 펌웨어 현재(기기 보고) vs 세트(설치 번들) 비교 행 */
+function FirmwareCompareRow({ icon: Icon, label, current, target }: { icon: LucideIcon; label: string; current: string | null; target: string | null }) {
+  const cur = current || '—'
+  const match = current && target ? current === target : null
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5">
+      <span className="flex items-center gap-2 text-[12px] text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" /> {label}
+      </span>
+      <div className="flex items-center gap-2.5">
+        <span className="font-mono text-[12px] tabular-nums text-foreground">
+          현재 <span className={`font-bold ${match === false ? 'text-warning' : ''}`}>{cur}</span>
+          {target && <span className="text-muted-foreground"> · 세트 <span className="font-bold text-foreground">{target}</span></span>}
+        </span>
+        {match !== null ? (
+          <span className={`inline-flex w-[58px] shrink-0 items-center justify-center gap-0.5 whitespace-nowrap rounded-full py-0.5 text-[10px] font-bold ${match ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+            {match ? <Check className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}{match ? '일치' : '불일치'}
+          </span>
+        ) : (
+          <span className="w-[58px] shrink-0" aria-hidden="true" />
+        )}
+      </div>
+    </div>
+  )
+}
+
 function PowerIcon({ on }: { on: boolean }) {
   return on ? (
     <Power className="h-4 w-4 text-success" />
@@ -602,6 +632,7 @@ export function DeviceDetailModal({
   const [tempAlias, setTempAlias] = useState(displayAlias)
   const [aliasError, setAliasError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showOta, setShowOta] = useState(false)
 
   // 배치된 텔레코일존 (미배정이면 배정 — 실연동 PUT /devices/:id/zone/:zoneId)
   const [displayZone, setDisplayZone] = useState<{ id: number; name: string } | null>(
@@ -849,21 +880,45 @@ export function DeviceDetailModal({
                 </div>
               </div>
             )}
+            {/* 펌웨어 — 현재(기기 보고) vs 설치 세트(번들) */}
+            <div className="rounded-xl border border-border p-4">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-[13px] text-muted-foreground">펌웨어</span>
+                </div>
+                <button
+                  onClick={() => setShowOta(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-[12px] font-bold text-primary transition-colors hover:bg-primary/15"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" /> 업데이트
+                </button>
+              </div>
+              {device.installedFirmware ? (
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-primary/5 px-3 py-2">
+                  <span className="flex items-center gap-2 text-[12px] text-primary"><Package className="h-4 w-4 shrink-0" />설치된 세트</span>
+                  <span className="text-right">
+                    <span className="font-mono text-[13px] font-bold text-primary">v{device.installedFirmware.version}</span>
+                    <span className="ml-2 text-[11px] text-muted-foreground">{formatDateTime(device.installedFirmware.uploaded_at)} 설치</span>
+                  </span>
+                </div>
+              ) : (
+                <p className="mb-2 rounded-lg bg-page px-3 py-2 text-[12px] text-muted-foreground">설치 이력 없음 (완료된 업데이트 없음)</p>
+              )}
+              <div className="divide-y divide-border/50">
+                <FirmwareCompareRow icon={Wifi} label="WiFi (ESP32)" current={device.wifiFirmwareVersion} target={device.installedFirmware?.wifi_version ?? null} />
+                <FirmwareCompareRow icon={Cpu} label="HL (Nordic)" current={device.hlFirmwareVersion} target={device.installedFirmware?.hl_version ?? null} />
+              </div>
+              {device.installedFirmware?.updates && device.installedFirmware.updates.length > 0 && (
+                <div className="mt-3 border-t border-border/50 pt-3">
+                  <p className="mb-1.5 text-[11px] text-muted-foreground">업데이트 내역 (세트 v{device.installedFirmware.version})</p>
+                  {device.installedFirmware.updates.map((u, i) => (
+                    <p key={i} className="py-0.5 text-[12px] leading-snug text-muted-foreground">· {u}</p>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="rounded-xl border border-border divide-y divide-border/50">
-              <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <Shield className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-[13px] text-muted-foreground">WiFi MCU 버전</span>
-                </div>
-                <span className="text-[13px] font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <Shield className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-[13px] text-muted-foreground">HL MCU 버전</span>
-                </div>
-                <span className="text-[13px] font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
-              </div>
               {[
                 { label: 'MAC 주소', value: device.mac, icon: Hash },
                 { label: '등록일', value: formatDateTime(device.registeredAt), icon: CalendarClock },
@@ -927,6 +982,7 @@ export function DeviceDetailModal({
           </button>
         </div>
       </div>
+      {showOta && <OtaUpdateModal macs={[device.mac]} onClose={() => setShowOta(false)} />}
     </div>
   )
 }
@@ -1174,15 +1230,16 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
                     onKeyDown={(e) => { if (e.key === 'Enter') addEntry() }}
                   />
                   {macCheck?.status === 'fixable' && (
-                    <div className="mt-2 flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="flex items-center gap-1.5 text-[12px] text-foreground">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
-                        <span>{macCheck.reasons.join(' · ')} 해야 하는 거 아니에요? → <span className="font-mono font-bold">{macCheck.canonical}</span></span>
+                    <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+                      <p className="flex items-start gap-1.5 text-[12px] leading-snug text-foreground">
+                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                        <span>{macCheck.reasons.join(' · ')} 해야 하는 거 아니에요?</span>
                       </p>
+                      <p className="mt-1.5 pl-5 font-mono text-[13px] font-bold tracking-tight text-foreground">{macCheck.canonical}</p>
                       <button
                         type="button"
                         onClick={() => setMac(macCheck.canonical as string)}
-                        className="flex shrink-0 items-center justify-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-destructive/90"
+                        className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-destructive px-3 py-2 text-[12px] font-bold text-white transition-colors hover:bg-destructive/90"
                       >
                         <Check className="h-3.5 w-3.5" /> 이렇게 바꾸기
                       </button>
@@ -1334,6 +1391,10 @@ export default function HearingLoopsPage() {
   const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest')
   const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
   const [showRegister, setShowRegister] = useState(false)
+  const [otaMode, setOtaMode] = useState(false)
+  const [otaSelected, setOtaSelected] = useState<Set<string>>(new Set())
+  const [otaModalMacs, setOtaModalMacs] = useState<string[] | null>(null)
+  const { data: firmwares } = useFirmwares()
 
   const all = useMemo(() => devices ?? [], [devices])
 
@@ -1380,6 +1441,26 @@ export default function HearingLoopsPage() {
     return list
   }, [zoneBaseList, search, sortOrder])
 
+  // OTA 모드 파생 — 최신 펌웨어 기준 업데이트 필요 ONLINE 기기(펌웨어 선택은 전송 모달에서)
+  const latestFw = firmwares?.[0] ?? null
+  const needUpdateMacs = useMemo(
+    () =>
+      filteredDevices
+        .filter(
+          (d) =>
+            d.connectionStatus === 'ONLINE' &&
+            (!latestFw || d.wifiFirmwareVersion !== latestFw.wifiVersion || d.hlFirmwareVersion !== latestFw.hlVersion),
+        )
+        .map((d) => d.mac),
+    [filteredDevices, latestFw],
+  )
+  const toggleOta = (mac: string) =>
+    setOtaSelected((prev) => {
+      const n = new Set(prev)
+      n.has(mac) ? n.delete(mac) : n.add(mac)
+      return n
+    })
+
   return (
     <div className="space-y-6">
       {/* ─── Page header ─── */}
@@ -1388,13 +1469,30 @@ export default function HearingLoopsPage() {
           <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">히어링루프 관리</h2>
           <p className="text-sm text-muted-foreground mt-2">등록된 히어링루프를 조회하고 관리할 수 있습니다.</p>
         </div>
-        <button
-          onClick={() => setShowRegister(true)}
-          className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-primary-dark px-4 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          히어링루프 등록
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          {!otaMode && (
+            <button
+              onClick={() => { setOtaMode(true); setOtaSelected(new Set()) }}
+              className="group flex items-center justify-center gap-2.5 rounded-xl border border-transparent py-2 pl-3 pr-4 text-[13px] font-bold text-primary-dark shadow-sm transition-all hover:shadow-[0_4px_16px_rgba(36,107,209,0.15)]"
+              style={{ background: 'linear-gradient(135deg,#EDF1F8 0%,#D6E5F8 40%,#DDDAF8 75%,#EDE8F4 100%)' }}
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/70 shadow-sm">
+                <RefreshCw className="h-4 w-4 text-primary transition-transform duration-300 group-hover:rotate-45" />
+              </span>
+              <span className="flex flex-col items-start leading-none">
+                <span className="text-primary-dark">OTA 업데이트</span>
+                <span className="mt-0.5 text-[10px] text-primary-dark/40">펌웨어 원격 업데이트</span>
+              </span>
+            </button>
+          )}
+          <button
+            onClick={() => setShowRegister(true)}
+            className="flex items-center justify-center gap-2 rounded-xl bg-primary-dark px-4 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            히어링루프 등록
+          </button>
+        </div>
       </div>
 
       {/* ─── Search · Zone filter · Sort ─── */}
@@ -1418,6 +1516,41 @@ export default function HearingLoopsPage() {
           {sortOrder === 'latest' ? '최신순' : '오래된순'}
         </button>
       </div>
+
+      {/* ─── OTA 모드 액션 바 ─── */}
+      {otaMode && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15"><RefreshCw className="h-4 w-4 text-primary" /></span>
+            <div className="leading-tight">
+              <p className="text-[13px] font-bold text-primary-dark">OTA 업데이트 모드</p>
+              <p className="text-[11px] text-muted-foreground"><b className="font-semibold text-foreground">{otaSelected.size}</b>대 선택 · ONLINE만 · 펌웨어는 전송 시 선택</p>
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => { setOtaMode(false); setOtaSelected(new Set()) }}
+              className="rounded-xl px-4 py-2 text-[12px] font-semibold text-muted-foreground transition-colors hover:bg-page"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => setOtaModalMacs([...otaSelected])}
+              disabled={otaSelected.size === 0}
+              className="flex items-center gap-1.5 rounded-xl bg-primary-dark px-4 py-2 text-[12px] font-bold text-white transition-colors hover:bg-primary-dark/90 disabled:opacity-40"
+            >
+              <Download className="h-3.5 w-3.5" /> 선택 업데이트{otaSelected.size > 0 ? ` (${otaSelected.size})` : ''}
+            </button>
+            <button
+              onClick={() => setOtaModalMacs(needUpdateMacs)}
+              disabled={needUpdateMacs.length === 0}
+              className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-[12px] font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-40"
+            >
+              <Download className="h-3.5 w-3.5" /> 전체 업데이트 ({needUpdateMacs.length})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ─── Table ─── */}
       <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
@@ -1504,6 +1637,17 @@ export default function HearingLoopsPage() {
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2.5">
+                          {otaMode && (
+                            <input
+                              type="checkbox"
+                              checked={otaSelected.has(device.mac)}
+                              disabled={device.connectionStatus !== 'ONLINE'}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => toggleOta(device.mac)}
+                              aria-label="OTA 선택"
+                              className="h-4 w-4 shrink-0 rounded border-border accent-primary disabled:opacity-40"
+                            />
+                          )}
                           <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${!device.telecoilZoneId ? 'bg-warning/10' : 'bg-primary/10'}`}>
                             {!device.telecoilZoneId ? <Package className="h-4 w-4 text-warning" /> : <Radio className="h-4 w-4 text-primary" />}
                           </div>
@@ -1543,6 +1687,9 @@ export default function HearingLoopsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-center">
                         <div className="inline-flex flex-col items-center gap-1">
+                          {device.firmwareVersion && (
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-mono font-bold text-muted-foreground">세트 v{device.firmwareVersion}</span>
+                          )}
                           {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
                           <p className="text-[10px] text-muted-foreground leading-tight">
                             <span className="font-medium">WiFi</span>{' '}
@@ -1601,6 +1748,17 @@ export default function HearingLoopsPage() {
                     {/* 타이틀 + 동작 상태 */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2.5">
+                        {otaMode && (
+                          <input
+                            type="checkbox"
+                            checked={otaSelected.has(device.mac)}
+                            disabled={device.connectionStatus !== 'ONLINE'}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => toggleOta(device.mac)}
+                            aria-label="OTA 선택"
+                            className="h-4 w-4 shrink-0 rounded border-border accent-primary disabled:opacity-40"
+                          />
+                        )}
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${!device.telecoilZoneId ? 'bg-warning/10' : 'bg-primary/10'}`}>
                           {!device.telecoilZoneId ? <Package className="h-4 w-4 text-warning" /> : <Radio className="h-4 w-4 text-primary" />}
                         </div>
@@ -1647,7 +1805,10 @@ export default function HearingLoopsPage() {
 
                     {/* 펌웨어 + 최근 업데이트 */}
                     <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-2.5 text-[11px]">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {device.firmwareVersion && (
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-mono font-bold text-muted-foreground">세트 v{device.firmwareVersion}</span>
+                        )}
                         {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
                         <span className="text-muted-foreground">
                           <span className="font-medium">WiFi</span>{' '}
@@ -1679,6 +1840,7 @@ export default function HearingLoopsPage() {
         <DeviceDetailModal device={selectedDevice} onClose={() => setSelectedDevice(null)} />
       )}
       {showRegister && <RegisterModal onClose={() => setShowRegister(false)} />}
+      {otaModalMacs && <OtaUpdateModal macs={otaModalMacs} onClose={() => setOtaModalMacs(null)} />}
     </div>
   )
 }
