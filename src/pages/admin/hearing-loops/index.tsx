@@ -37,7 +37,7 @@ import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/too
 import type { HearingLoop, DeviceStatusLogDto, DeviceLogDto, DeviceLogLevel } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
-import { formatDateTime } from '@/lib/format'
+import { formatDateTime, formatDateTimeSec } from '@/lib/format'
 import {
   useDevices,
   useUpdateAlias,
@@ -93,7 +93,7 @@ function DeviceLogRow({ log }: { log: DeviceLogDto }) {
         {log.module}
       </span>
       <span className="min-w-0 flex-1 break-all text-foreground">{log.message}</span>
-      <span className="shrink-0 text-muted-foreground">{formatDateTime(log.received_at)}</span>
+      <span className="shrink-0 text-muted-foreground">{formatDateTimeSec(log.received_at)}</span>
     </div>
   )
 }
@@ -309,12 +309,12 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   const statusQ = useDeviceStatusLogs(mac, 1, 20)
   const updatesQ = useDeviceUpdateSessions(mac, updatePage, 10)
   const errorsQ = useDeviceErrors(mac)
+  // 카운트 뱃지를 위해 모달 열릴 때 즉시 로드(다른 탭들과 동일). 이전엔 tab==='logs'일 때만 enable돼 초기 카운트가 0으로 떴음.
   const logsQ = useDeviceLogs(
     mac,
     logPage,
     LOG_LIMIT,
     logModule === 'all' ? undefined : logModule,
-    tab === 'logs',
   )
 
   const alerts = alertsQ.data?.items ?? []
