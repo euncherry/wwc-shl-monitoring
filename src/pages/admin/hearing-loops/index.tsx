@@ -28,6 +28,7 @@ import {
   Target,
   Star,
   Check,
+  Clock,
   ChevronDown,
   RefreshCw,
   ChevronLeft,
@@ -548,6 +549,23 @@ function FirmwareInconsistentBadge() {
   )
 }
 
+/** 프로비저닝 대기(PENDING) 뱃지 — 화이트리스트 등록만 되고 아직 최초 연결(IoT 프로비저닝) 안 된 기기 표시 */
+function ProvisioningBadge() {
+  return (
+    <TooltipRoot>
+      <TooltipTrigger asChild>
+        <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+          <Clock className="h-2.5 w-2.5" />
+          프로비저닝 대기
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        화이트리스트에 등록됐지만 아직 IoT Core 프로비저닝(최초 연결)이 안 된 상태입니다. 한 번도 연결된 적이 없어, 켜졌다 꺼진 오프라인 기기와는 다릅니다.
+      </TooltipContent>
+    </TooltipRoot>
+  )
+}
+
 function PowerIcon({ on }: { on: boolean }) {
   return on ? (
     <Power className="h-4 w-4 text-success" />
@@ -566,7 +584,7 @@ function displayTitle(device: Pick<HearingLoop, 'alias' | 'mac'>) {
    Detail Modal — 조회 전용 + 별칭 편집 + 삭제
    ══════════════════════════════════════════════════════ */
 
-function DeviceDetailModal({
+export function DeviceDetailModal({
   device,
   onClose,
 }: {
@@ -649,7 +667,10 @@ function DeviceDetailModal({
               <Radio className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-foreground">{title}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                {device.provisionStatus === 'PENDING' && <ProvisioningBadge />}
+              </div>
               {hasAlias && <p className="text-[12px] text-muted-foreground font-mono">{device.mac}</p>}
             </div>
           </div>
@@ -1487,7 +1508,10 @@ export default function HearingLoopsPage() {
                             {!device.telecoilZoneId ? <Package className="h-4 w-4 text-warning" /> : <Radio className="h-4 w-4 text-primary" />}
                           </div>
                           <div>
-                            <p className="text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
+                              {device.provisionStatus === 'PENDING' && <ProvisioningBadge />}
+                            </div>
                             {hasAlias && <p className="text-[11px] text-muted-foreground font-mono">{device.mac}</p>}
                           </div>
                         </div>
@@ -1581,7 +1605,10 @@ export default function HearingLoopsPage() {
                           {!device.telecoilZoneId ? <Package className="h-4 w-4 text-warning" /> : <Radio className="h-4 w-4 text-primary" />}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
+                            {device.provisionStatus === 'PENDING' && <ProvisioningBadge />}
+                          </div>
                           {hasAlias && <p className="truncate text-[11px] text-muted-foreground font-mono">{device.mac}</p>}
                         </div>
                       </div>

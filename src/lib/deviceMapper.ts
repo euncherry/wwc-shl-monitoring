@@ -45,6 +45,7 @@ export function toHearingLoop(dto: DeviceApiResponse): HearingLoop {
     hlFirmwareVersion: dto.hl_firmware_version ?? null,
     firmwareInconsistent: dto.firmware_inconsistent ?? false,
     status: deriveStatus(dto),
+    provisionStatus: dto.status,
     telecoilZoneId: dto.zone_id != null ? String(dto.zone_id) : null,
     telecoilZoneName: dto.zone?.name ?? null,
     lastUpdated: dto.last_seen_at ?? dto.created_at,

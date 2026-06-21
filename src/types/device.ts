@@ -36,6 +36,8 @@ export interface HearingLoop {
   /** 펌웨어 불일치 — 업데이트 도중 WiFi MCU·HL MCU 중 하나만 성공 시 true */
   firmwareInconsistent: boolean
   status: DeviceStatus
+  /** 프로비저닝 상태 (REAL — DeviceResponseDto.status). PENDING=화이트리스트 등록·IoT 프로비저닝(최초 연결) 대기, ACTIVE=완료. ⚠️ 동작상태(status·connectionStatus)와 무관. */
+  provisionStatus?: ProvisionStatus
   telecoilZoneId: string | null
   telecoilZoneName: string | null
   lastUpdated: string
