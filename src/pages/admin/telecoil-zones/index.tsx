@@ -642,7 +642,8 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
               <button
                 onClick={() => setShowOta(true)}
                 disabled={devices.length === 0}
-                className="flex items-center gap-2 rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-primary-dark/90 disabled:opacity-40"
+                className="group flex items-center gap-2 rounded-xl border border-transparent px-5 py-2.5 text-[13px] font-bold text-primary-dark shadow-sm transition-all hover:shadow-[0_4px_16px_rgba(36,107,209,0.15)] disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg,#EDF1F8 0%,#D6E5F8 40%,#DDDAF8 75%,#EDE8F4 100%)' }}
               >
                 <Download className="h-4 w-4" /> 펌웨어 업데이트
               </button>
