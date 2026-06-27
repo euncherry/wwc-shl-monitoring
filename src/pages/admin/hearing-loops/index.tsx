@@ -189,7 +189,7 @@ function UpdateSessionDetailModal({ sessionId, onClose }: { sessionId: number; o
         <div className="flex shrink-0 items-center justify-between border-b border-border bg-page/50 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <RefreshCw className="h-5 w-5 text-primary" />
+              <Download className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-foreground">업데이트 세션 #{sessionId}</h3>
@@ -437,7 +437,7 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
                     onClick={() => setSelectedSessionId(session.id)}
                     className="flex w-full items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-left text-[12px] hover:border-primary/30 hover:bg-page/50 transition-colors"
                   >
-                    <RefreshCw className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="shrink-0 font-mono font-bold text-foreground">v{session.firmware_version}</span>
                     <SessionStatusBadge status={session.status} />
                     <span className="min-w-0 flex-1 text-muted-foreground">{formatDateTime(session.triggered_at)}</span>
@@ -926,7 +926,7 @@ export function DeviceDetailModal({
                   onClick={() => setShowOta(true)}
                   className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-[12px] font-bold text-primary transition-colors hover:bg-primary/15"
                 >
-                  <RefreshCw className="h-3.5 w-3.5" /> 업데이트
+                  <Download className="h-3.5 w-3.5" /> 업데이트
                 </button>
               </div>
               {device.installedFirmware ? (
@@ -1512,7 +1512,7 @@ export default function HearingLoopsPage() {
               style={{ background: 'linear-gradient(135deg,#EDF1F8 0%,#D6E5F8 40%,#DDDAF8 75%,#EDE8F4 100%)' }}
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/70 shadow-sm">
-                <RefreshCw className="h-4 w-4 text-primary transition-transform duration-300 group-hover:rotate-45" />
+                <Download className="h-4 w-4 text-primary transition-transform duration-300 group-hover:translate-y-0.5" />
               </span>
               <span className="flex flex-col items-start leading-none">
                 <span className="text-primary-dark">OTA 업데이트</span>
@@ -1556,7 +1556,7 @@ export default function HearingLoopsPage() {
       {otaMode && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15"><RefreshCw className="h-4 w-4 text-primary" /></span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15"><Download className="h-4 w-4 text-primary" /></span>
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-primary-dark">OTA 업데이트 모드</p>
               <p className="text-[11px] text-muted-foreground"><b className="font-semibold text-foreground">{otaSelected.size}</b>대 선택 · ONLINE만 · 펌웨어는 전송 시 선택</p>

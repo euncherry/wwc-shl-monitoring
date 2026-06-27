@@ -23,7 +23,7 @@ import {
   Thermometer,
   Cpu,
   Info,
-  RefreshCw,
+  Download,
 } from 'lucide-react'
 import type { ZoneStatus, HearingLoop } from '@/types/device'
 import { WifiSignalIcon } from '@/components/WifiSignalIcon'
@@ -644,7 +644,7 @@ function ZoneDetailModal({ zoneId, onClose }: { zoneId: number; onClose: () => v
                 disabled={devices.length === 0}
                 className="flex items-center gap-2 rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-primary-dark/90 disabled:opacity-40"
               >
-                <RefreshCw className="h-4 w-4" /> 펌웨어 업데이트
+                <Download className="h-4 w-4" /> 펌웨어 업데이트
               </button>
             </div>
           </>
