@@ -1424,12 +1424,13 @@ function RegisterModal({ onClose }: { onClose: () => void }) {
    ══════════════════════════════════════════════════════ */
 
 export default function HearingLoopsPage() {
-  const { data: devices, isLoading, isError, refetch } = useDevices()
+  const { data: devices, isLoading, isError, isFetching, refetch } = useDevices()
 
   const [search, setSearch] = useState('')
   const [zoneFilter, setZoneFilter] = useState<string>('all') // 'all' | 'unassigned' | zoneId
   const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest')
   const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
+  const [listSpin, setListSpin] = useState(0) // 목록 새로고침 클릭마다 +1 → 아이콘 1회전
   const [showRegister, setShowRegister] = useState(false)
   const [otaMode, setOtaMode] = useState(false)
   const [otaSelected, setOtaSelected] = useState<Set<string>>(new Set())
@@ -1554,6 +1555,17 @@ export default function HearingLoopsPage() {
         >
           <ArrowUpDown className="h-3.5 w-3.5" />
           {sortOrder === 'latest' ? '최신순' : '오래된순'}
+        </button>
+
+        <button
+          onClick={() => { setListSpin((s) => s + 1); refetch() }}
+          disabled={isFetching}
+          aria-label="목록 새로고침"
+          title="목록 새로고침"
+          className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className="h-3.5 w-3.5 transition-transform duration-500 ease-out" style={{ transform: `rotate(${listSpin * 360}deg)` }} />
+          새로고침
         </button>
       </div>
 
