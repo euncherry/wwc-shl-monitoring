@@ -629,10 +629,12 @@ export function DeviceDetailModal({
   const qc = useQueryClient()
   const [freshDevice, setFreshDevice] = useState<HearingLoop | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [spin, setSpin] = useState(0) // 클릭마다 +1 → 아이콘 1회전
   /** 표시용 — 새로고침하면 GET /devices/:mac 최신값으로 교체(모달 안 닫힘) */
   const device = freshDevice ?? deviceProp
 
   const handleRefresh = async () => {
+    setSpin((s) => s + 1) // 클릭 시 1회전
     setRefreshing(true)
     try {
       const dto = await devicesApi.get(deviceProp.mac)
@@ -734,7 +736,10 @@ export function DeviceDetailModal({
                   title="정보 새로고침"
                   className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-page hover:text-primary transition-colors disabled:opacity-50"
                 >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  <RefreshCw
+                    className="h-4 w-4 transition-transform duration-500 ease-out"
+                    style={{ transform: `rotate(${spin * 360}deg)` }}
+                  />
                 </button>
               </div>
               {hasAlias && <p className="text-[12px] text-muted-foreground font-mono">{device.mac}</p>}
