@@ -1,5 +1,6 @@
 import { createElement, useEffect, useMemo, useState, type ReactNode } from 'react'
 import axios from 'axios'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Search,
   Wifi,
@@ -42,6 +43,7 @@ import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime, formatDateTimeSec } from '@/lib/format'
 import {
+  deviceKeys,
   useDevices,
   useUpdateAlias,
   useDeleteDevice,
@@ -51,8 +53,10 @@ import {
   useDeviceErrors,
   useDeviceLogs,
 } from '@/hooks/useDevices'
-import { useDeviceUpdateSessions, useUpdateSessionDetail, useFirmwares } from '@/hooks/useFirmware'
-import { useAlerts } from '@/hooks/useAlerts'
+import { devicesApi } from '@/api/devices'
+import { toHearingLoop } from '@/lib/deviceMapper'
+import { useDeviceUpdateSessions, useUpdateSessionDetail, useFirmwares, firmwareKeys } from '@/hooks/useFirmware'
+import { useAlerts, alertKeys } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 import { useZones } from '@/hooks/useZones'
 import { OtaUpdateModal } from './OtaUpdateModal'
@@ -615,13 +619,35 @@ function displayTitle(device: Pick<HearingLoop, 'alias' | 'mac'>) {
    ══════════════════════════════════════════════════════ */
 
 export function DeviceDetailModal({
-  device,
+  device: deviceProp,
   onClose,
 }: {
   device: HearingLoop
   onClose: () => void
 }) {
   useLockBodyScroll()
+  const qc = useQueryClient()
+  const [freshDevice, setFreshDevice] = useState<HearingLoop | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  /** 표시용 — 새로고침하면 GET /devices/:mac 최신값으로 교체(모달 안 닫힘) */
+  const device = freshDevice ?? deviceProp
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      const dto = await devicesApi.get(deviceProp.mac)
+      setFreshDevice(toHearingLoop(dto))
+    } catch {
+      // 실패 시 기존 값 유지(조용히)
+    } finally {
+      setRefreshing(false)
+    }
+    // 리스트 카드 + 이력 탭 동기화 (백그라운드 refetch)
+    qc.invalidateQueries({ queryKey: deviceKeys.all })
+    qc.invalidateQueries({ queryKey: alertKeys.all })
+    qc.invalidateQueries({ queryKey: firmwareKeys.all })
+  }
+
   const updateAlias = useUpdateAlias()
   const deleteDevice = useDeleteDevice()
   const assignZone = useAssignZone()
@@ -701,6 +727,15 @@ export function DeviceDetailModal({
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-foreground">{title}</h3>
                 {device.provisionStatus === 'PENDING' && <ProvisioningBadge />}
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  aria-label="정보 새로고침"
+                  title="정보 새로고침"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-page hover:text-primary transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </button>
               </div>
               {hasAlias && <p className="text-[12px] text-muted-foreground font-mono">{device.mac}</p>}
             </div>
