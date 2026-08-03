@@ -183,6 +183,19 @@ AlertSetting
 
 ---
 
+## 11. 기기 `disconnected_at` DTO 노출 🟢 (2026-08-03 추가)
+
+**현재**: `DeviceWhitelist.disconnected_at`은 엔티티에 존재하고 정확히 유지된다(브로커 disconnect 시 기록, 재연결 시 null — 4시간 CONNECTION_LOST 스케줄러가 이미 사용). 그러나 `DeviceResponseDto`에는 미노출(`last_seen_at`만 내려옴).
+
+**필요 이유**: 사용자(기관) 페이지에서 "연결 끊김"을 즉시가 아니라 **24시간 이상 지속 시에만** 표시하기로 결정(2026-08-03). 정확한 끊김 지속시간 계산에 이 필드가 필요하다.
+
+작업:
+- `GET /devices`, `GET /devices/:mac` 응답 DTO에 `disconnected_at: Date | null` 추가 — **값은 이미 있으므로 노출만**
+
+**프론트 인터림(현재)**: `connection_status==='OFFLINE' && (now − last_seen_at) ≥ 24h`로 근사. `last_seen_at`은 마지막 StatusReport 시각이라 실제 끊김 시점보다 과거일 수 있어 **이르게 판정**될 수 있음 → 필드가 내려오면 자동 교체(FE 매퍼가 이미 `disconnected_at ?? last_seen_at` 폴백으로 구현됨).
+
+---
+
 ## 우선순위 요약
 
 > ✅ 완료: CORS, 기기 별칭(alias), 사용자 아이디 수정, `/users/me` — 상단 "이미 구현됨" 참고.
@@ -196,3 +209,4 @@ AlertSetting
 | 5 | Firmware description / 전체 업데이트 | 🟡 |
 | 6 | 알림센터 전체 | 🟡 (대규모) |
 | 7 | 연결 상태 산출 / 존 배정 해제 | 🟢 |
+| 8 | 기기 `disconnected_at` DTO 노출 (§11) | 🟢 |

@@ -331,6 +331,7 @@ src/
 - [x] ✅ **기기 존 배정 → 실연동 완료** `PUT /devices/:id/zone/:zoneId`(zoneId 경로 파라미터, body 없음, ADMIN). MSW 존배정 목·오버라이드·'목' 배지 제거함. 브라우저에서 `PUT /devices/1/zone/1 → 200` 확인. — `§9`
   - ⚠️ **존 배정 해제(미배정으로 되돌리기)는 엔드포인트 없음** — `:zoneId`가 필수 경로 파라미터(null 불가). 해제 기능이 필요하면 백엔드 추가 요청. (재배치=다른 존으로 PUT은 가능)
 - [ ] 관리자 대시보드 상세 명세 확정 — `§11`
+- [ ] 🟢 **기기 `disconnected_at` DTO 노출 요청 중** (2026-08-03, `BACKEND_REQUIREMENTS §11`) — 유저 페이지 오프라인 표시는 **3단계**(관리자는 실시간 유지): 미연결 4h 미만=전부 정상 연출 / 4~24h=WiFi만 회색 '끊김' / 24h 이상=빨간 '연결 끊김'+진짜 상태. 현재 `last_seen_at` 인터림으로 근사 중, 필드 내려오면 FE 매퍼 폴백(`disconnected_at ?? last_seen_at`)이 자동 교체.
 - [x] ✅ online 판정 = `connection_status`(IoT lifecycle)로 해결 — 더 이상 last_seen 5분 휴리스틱 안 씀.
 
 ---
