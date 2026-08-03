@@ -29,8 +29,11 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout()
-      // 로그인 화면이 아닐 때만 이동 (무한 루프 방지)
-      if (window.location.pathname !== '/login') {
+      // 로그인 화면이 아닐 때만 이동 (무한 루프 방지).
+      // /status-spec은 비로그인 열람이 가능한 표시 규격 실증 페이지라 튕기지 않고
+      // 실기기 섹션만 '로그인 필요'로 처리한다.
+      const NO_REDIRECT = ['/login', '/status-spec']
+      if (!NO_REDIRECT.includes(window.location.pathname)) {
         window.location.assign('/login')
       }
     }

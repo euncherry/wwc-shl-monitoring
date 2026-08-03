@@ -14,11 +14,13 @@ export const deviceKeys = {
     [...deviceKeys.all, 'deviceLogs', mac, page, limit, module ?? ''] as const,
 }
 
-/** 기기 목록 — HearingLoop 뷰모델로 매핑해서 반환 */
-export function useDevices() {
+/** 기기 목록 — HearingLoop 뷰모델로 매핑해서 반환.
+ *  enabled=false면 요청하지 않는다(비로그인 화면에서 401 리다이렉트를 피하기 위함 — /status-spec). */
+export function useDevices(enabled = true) {
   return useQuery({
     queryKey: deviceKeys.list(),
     queryFn: devicesApi.list,
+    enabled,
     select: (data) => data.map(toHearingLoop),
   })
 }

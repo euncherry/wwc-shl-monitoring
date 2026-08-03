@@ -4,8 +4,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   Search,
   Wifi,
-  Power,
-  PowerOff,
   Thermometer,
   Shield,
   MapPin,
@@ -29,7 +27,6 @@ import {
   Target,
   Star,
   Check,
-  Clock,
   Cpu,
   ChevronDown,
   RefreshCw,
@@ -37,8 +34,7 @@ import {
   Download,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import type { HearingLoop, DeviceStatusLogDto, DeviceLogDto, DeviceLogLevel } from '@/types/device'
+import type { HearingLoop, DeviceStatusLogDto, DeviceLogDto, DeviceLogLevel, DeviceErrorLog } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime, formatDateTimeSec } from '@/lib/format'
@@ -60,6 +56,13 @@ import { useAlerts, alertKeys } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 import { useZones } from '@/hooks/useZones'
 import { OtaUpdateModal } from './OtaUpdateModal'
+import {
+  AdminDeviceTableHead,
+  AdminDeviceTableRow,
+  AdminDeviceMobileCard,
+  PowerIcon,
+  ProvisioningBadge,
+} from '@/components/device/AdminDeviceRow'
 import type { CreateDeviceInput } from '@/api/devices'
 import type { UpdateSessionDto } from '@/types/firmware'
 
@@ -155,6 +158,37 @@ function SessionStatusBadge({ status }: { status: UpdateSessionDto['status'] }) 
     <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
       <Loader2 className="h-3 w-3 animate-spin" /> 진행 중
     </span>
+  )
+}
+
+/* ── 업데이트 세션 한 줄 (업데이트 이력 탭 + 전체보기 합본 공용) ── */
+function SessionRow({ session, onClick }: { session: UpdateSessionDto; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-left text-[12px] hover:border-primary/30 hover:bg-page/50 transition-colors"
+    >
+      <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="shrink-0 font-mono font-bold text-foreground">v{session.firmware_version}</span>
+      <SessionStatusBadge status={session.status} />
+      <span className="min-w-0 flex-1 text-muted-foreground">{formatDateTime(session.triggered_at)}</span>
+      {session.completed_at && (
+        <span className="shrink-0 text-muted-foreground">→ {formatDateTime(session.completed_at)}</span>
+      )}
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+    </button>
+  )
+}
+
+/* ── 에러 로그 한 줄 (에러 로그 탭 + 전체보기 합본 공용) ── */
+function ErrorRow({ e }: { e: DeviceErrorLog }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-[12px]">
+      <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+      <span className="shrink-0 font-mono font-bold text-foreground">{e.code}</span>
+      {e.message && <span className="min-w-0 flex-1 truncate text-muted-foreground">{e.message}</span>}
+      <span className="shrink-0 text-muted-foreground">{formatDateTime(e.occurred_at)}</span>
+    </div>
   )
 }
 
@@ -305,6 +339,7 @@ function UpdateSessionDetailModal({ sessionId, onClose }: { sessionId: number; o
 }
 
 const LOG_LIMIT = 20
+const SESSION_LIMIT = 10
 
 function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   const [tab, setTab] = useState<HistoryTab>('alerts')
@@ -313,43 +348,45 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
   const [logPage, setLogPage] = useState(1)
   const [logModule, setLogModule] = useState<LogModuleFilter>('all')
 
-  const alertsQ = useAlerts({ device_id: deviceId, limit: 20 })
-  const statusQ = useDeviceStatusLogs(mac, 1, 20)
-  const updatesQ = useDeviceUpdateSessions(mac, updatePage, 10)
+  // 이력 규모가 작아(기기당 수백 건) 전량을 한 번에 받는다 — 페이지네이션·모듈 필터는 클라이언트 처리.
+  // 덕분에 '전체보기' 합본이 모든 종류·모든 건을 포함할 수 있다.
+  // ⚠️ /alerts의 total·통계는 device_id 필터를 반영하지 않는 전역값 → 개수는 items.length 사용.
+  const alertsQ = useAlerts({ device_id: deviceId, limit: 1000 })
+  const statusQ = useDeviceStatusLogs(mac, 1, 1000)
+  const updatesQ = useDeviceUpdateSessions(mac, 1, 1000)
   const errorsQ = useDeviceErrors(mac)
   // 카운트 뱃지를 위해 모달 열릴 때 즉시 로드(다른 탭들과 동일). 이전엔 tab==='logs'일 때만 enable돼 초기 카운트가 0으로 떴음.
-  const logsQ = useDeviceLogs(
-    mac,
-    logPage,
-    LOG_LIMIT,
-    logModule === 'all' ? undefined : logModule,
-  )
+  const logsQ = useDeviceLogs(mac, 1, 1000)
 
   const alerts = alertsQ.data?.items ?? []
   const statusLogs = statusQ.data?.data ?? []
   const sessions = updatesQ.data?.data ?? []
-  const sessionTotal = updatesQ.data?.total ?? 0
   const errors = errorsQ.data ?? []
-  const deviceLogs = logsQ.data?.data ?? []
-  const deviceLogsTotal = logsQ.data?.total ?? 0
+  const allDeviceLogs = logsQ.data?.data ?? []
 
-  const sessionTotalPages = Math.ceil(sessionTotal / 10)
-  const logTotalPages = Math.ceil(deviceLogsTotal / LOG_LIMIT)
+  const filteredLogs = logModule === 'all' ? allDeviceLogs : allDeviceLogs.filter((l) => l.module === logModule)
+  const sessionTotalPages = Math.ceil(sessions.length / SESSION_LIMIT)
+  const logTotalPages = Math.ceil(filteredLogs.length / LOG_LIMIT)
+  const pagedSessions = sessions.slice((updatePage - 1) * SESSION_LIMIT, updatePage * SESSION_LIMIT)
+  const pagedLogs = filteredLogs.slice((logPage - 1) * LOG_LIMIT, logPage * LOG_LIMIT)
 
   const merged = useMemo(() => {
     const items = [
       ...alerts.map((a) => ({ kind: 'alert' as const, ts: a.occurred_at, a })),
       ...statusLogs.map((s) => ({ kind: 'status' as const, ts: s.reported_at, s })),
+      ...sessions.map((u) => ({ kind: 'session' as const, ts: u.triggered_at, u })),
+      ...errors.map((e) => ({ kind: 'error' as const, ts: e.occurred_at, e })),
+      ...allDeviceLogs.map((l) => ({ kind: 'log' as const, ts: l.received_at, l })),
     ]
     return items.sort((x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime())
-  }, [alerts, statusLogs])
+  }, [alerts, statusLogs, sessions, errors, allDeviceLogs])
 
   const tabs: { key: HistoryTab; label: string; count: number }[] = [
     { key: 'alerts', label: '알림 이력', count: alerts.length },
     { key: 'status', label: '상태 이력', count: statusLogs.length },
-    { key: 'updates', label: '업데이트 이력', count: sessionTotal },
+    { key: 'updates', label: '업데이트 이력', count: sessions.length },
     { key: 'errors', label: '에러 로그', count: errors.length },
-    { key: 'logs', label: '디바이스 로그', count: deviceLogsTotal },
+    { key: 'logs', label: '디바이스 로그', count: allDeviceLogs.length },
     { key: 'all', label: '전체보기', count: merged.length },
   ]
 
@@ -359,7 +396,7 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
     : tab === 'updates' ? updatesQ.isLoading
     : tab === 'errors' ? errorsQ.isLoading
     : tab === 'logs' ? logsQ.isLoading
-    : alertsQ.isLoading || statusQ.isLoading
+    : alertsQ.isLoading || statusQ.isLoading || updatesQ.isLoading || errorsQ.isLoading || logsQ.isLoading
 
   const isError =
     tab === 'status' ? statusQ.isError
@@ -367,7 +404,7 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
     : tab === 'updates' ? updatesQ.isError
     : tab === 'errors' ? errorsQ.isError
     : tab === 'logs' ? logsQ.isError
-    : alertsQ.isError || statusQ.isError
+    : alertsQ.isError || statusQ.isError || updatesQ.isError || errorsQ.isError || logsQ.isError
 
   const moduleFilterBtns: { key: LogModuleFilter; label: string }[] = [
     { key: 'all', label: '전체' },
@@ -431,21 +468,8 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
           ) : (
             <>
               <div className="space-y-1.5">
-                {sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    onClick={() => setSelectedSessionId(session.id)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-left text-[12px] hover:border-primary/30 hover:bg-page/50 transition-colors"
-                  >
-                    <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="shrink-0 font-mono font-bold text-foreground">v{session.firmware_version}</span>
-                    <SessionStatusBadge status={session.status} />
-                    <span className="min-w-0 flex-1 text-muted-foreground">{formatDateTime(session.triggered_at)}</span>
-                    {session.completed_at && (
-                      <span className="shrink-0 text-muted-foreground">→ {formatDateTime(session.completed_at)}</span>
-                    )}
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  </button>
+                {pagedSessions.map((session) => (
+                  <SessionRow key={session.id} session={session} onClick={() => setSelectedSessionId(session.id)} />
                 ))}
               </div>
 
@@ -478,23 +502,18 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
         ) : (
           <div className="space-y-1.5">
             {errors.map((e) => (
-              <div key={e.id} className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-[12px]">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
-                <span className="shrink-0 font-mono font-bold text-foreground">{e.code}</span>
-                {e.message && <span className="min-w-0 flex-1 truncate text-muted-foreground">{e.message}</span>}
-                <span className="shrink-0 text-muted-foreground">{formatDateTime(e.occurred_at)}</span>
-              </div>
+              <ErrorRow key={e.id} e={e} />
             ))}
           </div>
         )
       ) : tab === 'logs' ? (
         <>
-          {deviceLogs.length === 0 ? (
+          {filteredLogs.length === 0 ? (
             <HistoryEmpty text="디바이스 로그가 없습니다." />
           ) : (
             <>
               <div className="space-y-1.5">
-                {deviceLogs.map((log) => (
+                {pagedLogs.map((log) => (
                   <DeviceLogRow key={log.id} log={log} />
                 ))}
               </div>
@@ -524,7 +543,13 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
         </>
       ) : merged.length ? (
         <div className="space-y-2">
-          {merged.map((m) => (m.kind === 'alert' ? <AlertRow key={`a${m.a.id}`} a={m.a} /> : <StatusRow key={`s${m.s.id}`} s={m.s} />))}
+          {merged.map((m) =>
+            m.kind === 'alert' ? <AlertRow key={`a${m.a.id}`} a={m.a} />
+            : m.kind === 'status' ? <StatusRow key={`s${m.s.id}`} s={m.s} />
+            : m.kind === 'session' ? <SessionRow key={`u${m.u.id}`} session={m.u} onClick={() => setSelectedSessionId(m.u.id)} />
+            : m.kind === 'error' ? <ErrorRow key={`e${m.e.id}`} e={m.e} />
+            : <DeviceLogRow key={`l${m.l.id}`} log={m.l} />
+          )}
         </div>
       ) : (
         <HistoryEmpty text="이력이 없습니다." />
@@ -538,39 +563,6 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
         />
       )}
     </div>
-  )
-}
-
-function FirmwareInconsistentBadge() {
-  return (
-    <TooltipRoot>
-      <TooltipTrigger asChild>
-        <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
-          <AlertTriangle className="h-2.5 w-2.5" />
-          불일치
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        업데이트 도중 WiFi MCU와 HL MCU 중 하나만 성공하여 펌웨어 상태를 추적할 수 없는 상태입니다. 두 MCU가 동일한 버전이 되도록 재업데이트가 필요합니다.
-      </TooltipContent>
-    </TooltipRoot>
-  )
-}
-
-/** 프로비저닝 대기(PENDING) 뱃지 — 화이트리스트 등록만 되고 아직 최초 연결(IoT 프로비저닝) 안 된 기기 표시 */
-function ProvisioningBadge() {
-  return (
-    <TooltipRoot>
-      <TooltipTrigger asChild>
-        <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-          <Clock className="h-2.5 w-2.5" />
-          프로비저닝 대기
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        화이트리스트에 등록됐지만 아직 IoT Core 프로비저닝(최초 연결)이 안 된 상태입니다. 한 번도 연결된 적이 없어, 켜졌다 꺼진 오프라인 기기와는 다릅니다.
-      </TooltipContent>
-    </TooltipRoot>
   )
 }
 
@@ -598,20 +590,6 @@ function FirmwareCompareRow({ icon: Icon, label, current, target }: { icon: Luci
       </div>
     </div>
   )
-}
-
-function PowerIcon({ on }: { on: boolean }) {
-  return on ? (
-    <Power className="h-4 w-4 text-success" />
-  ) : (
-    <PowerOff className="h-4 w-4 text-muted-foreground" />
-  )
-}
-
-
-/** 별칭 있으면 별칭, 없으면 MAC */
-function displayTitle(device: Pick<HearingLoop, 'alias' | 'mac'>) {
-  return device.alias?.trim() ? device.alias : device.mac
 }
 
 /* ══════════════════════════════════════════════════════
@@ -896,12 +874,12 @@ export function DeviceDetailModal({
               </div>
             </div>
 
-            {/* 과열 경보 — 실값(last_gpio_state). true=과열 감지, false=정상. (온도 센서 없음 → 온도값 대신 과열 여부만 표시) */}
+            {/* 과열 경보 — 실값(last_gpio_state). true=과열 감지, false=정상. 전원 OFF면 값이 갱신되지 않으므로 '—'. (온도 센서 없음 → 온도값 대신 과열 여부만 표시) */}
             <div className="rounded-xl border border-border p-4">
               <span className="text-[12px] text-muted-foreground block mb-2">과열 경보</span>
               <div className="flex items-center gap-2">
-                <Thermometer className={`h-4 w-4 ${device.overTemperature ? 'text-destructive' : 'text-success'}`} />
-                <span className={`text-sm font-bold ${device.overTemperature ? 'text-destructive' : 'text-foreground'}`}>{device.overTemperature ? '과열 감지' : '정상'}</span>
+                <Thermometer className={`h-4 w-4 ${!device.power ? 'text-muted-foreground/50' : device.overTemperature ? 'text-destructive' : 'text-success'}`} />
+                <span className={`text-sm font-bold ${!device.power ? 'text-muted-foreground' : device.overTemperature ? 'text-destructive' : 'text-foreground'}`}>{!device.power ? '—' : device.overTemperature ? '과열 감지' : '정상'}</span>
               </div>
             </div>
 
@@ -1634,19 +1612,7 @@ export default function HearingLoopsPage() {
 
         <div className="hidden md:block overflow-x-auto scrollbar-thin">
           <table className="w-full">
-            <thead>
-              <tr className="bg-page/50 border-b border-border">
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">기기</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">텔레코일존</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">동작</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">과열</th>
-                <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">최근 업데이트</th>
-                <th className="px-5 py-3 w-12"></th>
-              </tr>
-            </thead>
+            <AdminDeviceTableHead />
             <tbody className="divide-y divide-border/40">
               {isLoading ? (
                 <tr>
@@ -1679,89 +1645,16 @@ export default function HearingLoopsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredDevices.map((device) => {
-                  const hasAlias = Boolean(device.alias?.trim())
-                  return (
-                    <tr
-                      key={device.id}
-                      className="transition-colors hover:bg-main-blue-1/10 cursor-pointer group"
-                      onClick={() => setSelectedDevice(device)}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          {otaMode && (
-                            <input
-                              type="checkbox"
-                              checked={otaSelected.has(device.mac)}
-                              disabled={device.connectionStatus !== 'ONLINE'}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={() => toggleOta(device.mac)}
-                              aria-label="OTA 선택"
-                              className="h-4 w-4 shrink-0 rounded border-border accent-primary disabled:opacity-40"
-                            />
-                          )}
-                          <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${!device.telecoilZoneId ? 'bg-warning/10' : 'bg-primary/10'}`}>
-                            {!device.telecoilZoneId ? <Package className="h-4 w-4 text-warning" /> : <Radio className="h-4 w-4 text-primary" />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
-                              {device.provisionStatus === 'PENDING' && <ProvisioningBadge />}
-                            </div>
-                            {hasAlias && <p className="text-[11px] text-muted-foreground font-mono">{device.mac}</p>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {device.telecoilZoneName ? (
-                          <p className="text-[13px] font-semibold text-foreground">{device.telecoilZoneName}</p>
-                        ) : (
-                          <span className="text-[12px] text-warning font-semibold">미배정</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-center"><PowerIcon on={device.power} /></td>
-                      <td className="px-5 py-3.5 text-center" title={connectionMeta(device.connectionStatus).label}>
-                        <div className="flex justify-center">
-                          {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <WifiSignalIcon signal={device.wifiSignal} />
-                          {/* 임시: RSSI 원시값(dBm) 표시 — 신호 단계 디버깅용 */}
-                          <span className="text-[10px] tabular-nums text-muted-foreground">{device.wifiRssi != null ? `${device.wifiRssi}dBm` : '—'}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <span className={`text-[13px] font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>
-                          {device.overTemperature ? '과열' : '정상'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <div className="inline-flex flex-col items-center gap-1">
-                          {device.firmwareVersion && (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-mono font-bold text-muted-foreground">세트 v{device.firmwareVersion}</span>
-                          )}
-                          {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
-                          <p className="text-[10px] text-muted-foreground leading-tight">
-                            <span className="font-medium">WiFi</span>{' '}
-                            <span className="font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
-                          </p>
-                          <p className="text-[10px] text-muted-foreground leading-tight">
-                            <span className="font-medium">HL</span>{' '}
-                            <span className="font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5"><span className="text-[12px] text-muted-foreground">{formatDateTime(device.lastUpdated)}</span></td>
-                      <td className="px-3 py-3.5 text-center">
-                        <button className="rounded-lg p-1.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-page transition-all">
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })
+                filteredDevices.map((device) => (
+                  <AdminDeviceTableRow
+                    key={device.id}
+                    device={device}
+                    onClick={() => setSelectedDevice(device)}
+                    otaMode={otaMode}
+                    otaChecked={otaSelected.has(device.mac)}
+                    onToggleOta={() => toggleOta(device.mac)}
+                  />
+                ))
               )}
             </tbody>
           </table>
@@ -1789,92 +1682,16 @@ export default function HearingLoopsPage() {
             </div>
           ) : (
             <div className="space-y-3 p-4">
-              {filteredDevices.map((device) => {
-                const hasAlias = Boolean(device.alias?.trim())
-                return (
-                  <button
-                    key={device.id}
-                    onClick={() => setSelectedDevice(device)}
-                    className="flex w-full flex-col gap-3 rounded-xl border border-border bg-white p-4 text-left transition-colors hover:bg-main-blue-1/10"
-                  >
-                    {/* 타이틀 + 동작 상태 */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        {otaMode && (
-                          <input
-                            type="checkbox"
-                            checked={otaSelected.has(device.mac)}
-                            disabled={device.connectionStatus !== 'ONLINE'}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={() => toggleOta(device.mac)}
-                            aria-label="OTA 선택"
-                            className="h-4 w-4 shrink-0 rounded border-border accent-primary disabled:opacity-40"
-                          />
-                        )}
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${!device.telecoilZoneId ? 'bg-warning/10' : 'bg-primary/10'}`}>
-                          {!device.telecoilZoneId ? <Package className="h-4 w-4 text-warning" /> : <Radio className="h-4 w-4 text-primary" />}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="truncate text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
-                            {device.provisionStatus === 'PENDING' && <ProvisioningBadge />}
-                          </div>
-                          {hasAlias && <p className="truncate text-[11px] text-muted-foreground font-mono">{device.mac}</p>}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5" title={connectionMeta(device.connectionStatus).label}>
-                        {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
-                        <span className={`text-[11px] font-bold ${connectionMeta(device.connectionStatus).color}`}>{connectionMeta(device.connectionStatus).label}</span>
-                      </div>
-                    </div>
-
-                    {/* 텔레코일존 */}
-                    <div className="flex items-center gap-1.5 text-[12px]">
-                      <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      {device.telecoilZoneName ? (
-                        <span className="font-semibold text-foreground">{device.telecoilZoneName}</span>
-                      ) : (
-                        <span className="font-semibold text-warning">미배정</span>
-                      )}
-                    </div>
-
-                    {/* 상태 칩 */}
-                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
-                        <PowerIcon on={device.power} />
-                        <span className="font-semibold text-foreground">{device.power ? 'ON' : 'OFF'}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
-                        <WifiSignalIcon signal={device.wifiSignal} />
-                        <span className="font-semibold text-foreground">{WIFI_SIGNAL_LABEL[device.wifiSignal]}</span>
-                        {device.wifiRssi != null && <span className="tabular-nums text-muted-foreground">{device.wifiRssi}dBm</span>}
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
-                        <Thermometer className={`h-3.5 w-3.5 ${device.overTemperature ? 'text-destructive' : 'text-success'}`} />
-                        <span className={`font-semibold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}>{device.overTemperature ? '과열' : '정상'}</span>
-                      </span>
-                    </div>
-
-                    {/* 펌웨어 + 최근 업데이트 */}
-                    <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-2.5 text-[11px]">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {device.firmwareVersion && (
-                          <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-mono font-bold text-muted-foreground">세트 v{device.firmwareVersion}</span>
-                        )}
-                        {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
-                        <span className="text-muted-foreground">
-                          <span className="font-medium">WiFi</span>{' '}
-                          <span className="font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
-                          {' · '}
-                          <span className="font-medium">HL</span>{' '}
-                          <span className="font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
-                        </span>
-                      </div>
-                      <span className="shrink-0 text-muted-foreground">{formatDateTime(device.lastUpdated)}</span>
-                    </div>
-                  </button>
-                )
-              })}
+              {filteredDevices.map((device) => (
+                <AdminDeviceMobileCard
+                  key={device.id}
+                  device={device}
+                  onClick={() => setSelectedDevice(device)}
+                  otaMode={otaMode}
+                  otaChecked={otaSelected.has(device.mac)}
+                  onToggleOta={() => toggleOta(device.mac)}
+                />
+              ))}
             </div>
           )}
         </div>

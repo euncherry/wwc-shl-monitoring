@@ -51,6 +51,7 @@ export function toHearingLoop(dto: DeviceApiResponse): HearingLoop {
     telecoilZoneName: dto.zone?.name ?? null,
     lastUpdated: dto.last_seen_at ?? dto.created_at,
     registeredAt: dto.registered_at ?? dto.created_at,
+    disconnectedAt: dto.disconnected_at ?? null,
     alerts: dto.alerts ?? [],
   }
 }

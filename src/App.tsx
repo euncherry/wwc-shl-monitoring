@@ -20,6 +20,9 @@ import TelecoilZonesPage from '@/pages/admin/telecoil-zones'
 import FirmwarePage from '@/pages/admin/firmware'
 import AlertCenterPage from '@/pages/admin/alerts'
 
+/* 표시 규격 실증 페이지 — 메뉴 미노출, URL 직접 입력 전용 (가드 밖 공개) */
+import StatusSpecPage from '@/pages/status-spec'
+
 /* User pages */
 import UserDashboard from '@/pages/user/dashboard'
 import UserHearingLoops from '@/pages/user/hearing-loops'
@@ -67,6 +70,9 @@ function App() {
           <Route path="/user/support" element={<UserSupport />} />
         </Route>
       </Route>
+
+      {/* ─── 표시 규격 실증 (시험성적서 검증용) — 가드·레이아웃 밖, 메뉴 미노출 ─── */}
+      <Route path="/status-spec" element={<StatusSpecPage />} />
 
       {/* ─── Root & Fallback ─── */}
       <Route path="/" element={<RoleRedirect />} />

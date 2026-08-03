@@ -46,6 +46,8 @@ export interface HearingLoop {
   telecoilZoneName: string | null
   lastUpdated: string
   registeredAt: string
+  /** 연결 끊김 시각(재연결 시 null). 백엔드 DTO 노출 대기 — 없으면 lastUpdated(last_seen_at)로 근사. */
+  disconnectedAt?: string | null
   alerts: AlertHistory[]
 }
 
@@ -84,6 +86,9 @@ export interface DeviceResponseDto {
   /** 온도 °C. ⚠️ 무의미 — 기기에 온도 센서 없음(고정/시드값). 고온 여부는 last_gpio_state(과열 경보)로 판단. */
   last_temperature: number | null
   last_seen_at: string | null
+  /** 연결이 끊긴 시각(재연결 시 null). 백엔드 엔티티엔 있으나 DTO 미노출 — 노출 요청 중(BACKEND_REQUIREMENTS §11).
+   *  내려오면 유저 페이지 '연결 끊김(24h 지속)' 판정의 정확한 기준이 됨(현재는 last_seen_at 인터림). */
+  disconnected_at?: string | null
   /** 현재 설치된 펌웨어 세트(번들) 객체. 마지막 완료 설치 기준(firmware_version·firmware_id 대체 — develop 579ea6b). */
   firmware: FirmwareResponseDto | null
   /** ESP32 WiFi MCU 펌웨어 버전 */

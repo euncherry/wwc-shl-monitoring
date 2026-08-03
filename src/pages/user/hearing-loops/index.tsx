@@ -1,4 +1,4 @@
-import { createElement, useState, type ReactNode } from 'react'
+import { createElement, useState } from 'react'
 import axios from 'axios'
 import {
   Radio,
@@ -7,7 +7,6 @@ import {
   Thermometer,
   Wifi,
   WifiOff,
-  Building2,
   Search,
   Pencil,
   Check,
@@ -18,88 +17,21 @@ import {
   XCircle,
   Loader2,
 } from 'lucide-react'
-import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import type { HearingLoop, DeviceStatus, ConnectionStatus, WifiSignal } from '@/types/device'
+import type { HearingLoop, ConnectionStatus } from '@/types/device'
 import { useDevices, useUpdateAlias } from '@/hooks/useDevices'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL, wifiSignalColor } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
 import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
+import { deriveUserStatus, isSoftOff, isWifiCut } from '@/lib/userDeviceDisplay'
+import { UserDeviceCard, StatusBadge, displayTitle } from '@/components/device/UserDeviceCard'
 
 /* ══════════════════════════════════════════════════════
    사용자 기관 히어링루프 — GET /devices (ZONE_USER는 백엔드가 소속 존 자동 필터)
+   ⚠️ 상태 표시 정책(4h/24h 3단계)과 카드 마크업은 공유 모듈에 있다:
+      @/lib/userDeviceDisplay (판정) · @/components/device/UserDeviceCard (표시)
+      → 표시 규격 실증 페이지(/status-spec)가 같은 소스를 렌더한다. 여기서 재정의 금지.
    ══════════════════════════════════════════════════════ */
-
-/** 별칭 있으면 별칭, 없으면 MAC */
-function displayTitle(device: Pick<HearingLoop, 'alias' | 'mac'>) {
-  return device.alias?.trim() ? device.alias : device.mac
-}
-
-function FirmwareInconsistentBadge() {
-  return (
-    <TooltipRoot>
-      <TooltipTrigger asChild>
-        <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
-          <AlertTriangle className="h-2.5 w-2.5" />
-          불일치
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        업데이트 도중 WiFi MCU와 HL MCU 중 하나만 성공하여 펌웨어 상태를 추적할 수 없는 상태입니다. 재업데이트가 필요합니다.
-      </TooltipContent>
-    </TooltipRoot>
-  )
-}
-
-/* ── Sub-components ── */
-
-function StatusBadge({ status }: { status: DeviceStatus }) {
-  const m: Record<DeviceStatus, { label: string; dot: string; cls: string }> = {
-    normal: { label: '정상', dot: 'bg-success', cls: 'bg-success/10 text-success' },
-    warning: { label: '경고', dot: 'bg-warning', cls: 'bg-warning/10 text-warning' },
-    error: { label: '오류', dot: 'bg-destructive', cls: 'bg-destructive/10 text-destructive' },
-    offline: { label: '오프라인', dot: 'bg-muted-foreground', cls: 'bg-muted text-muted-foreground' },
-  }
-  const s = m[status]
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${s.cls}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-      {s.label}
-    </span>
-  )
-}
-
-/* ── Status Chip (전원·동작·WiFi·과열) ── */
-
-type Tone = 'success' | 'warning' | 'destructive' | 'muted' | 'info'
-
-const TONE: Record<Tone, string> = {
-  success: 'bg-success/10 text-success',
-  warning: 'bg-warning/10 text-warning',
-  destructive: 'bg-destructive/10 text-destructive',
-  muted: 'bg-muted text-muted-foreground',
-  info: 'bg-primary/10 text-primary',
-}
-
-function connTone(s: ConnectionStatus): Tone {
-  return s === 'ONLINE' ? 'success' : s === 'UPDATING' ? 'info' : 'muted'
-}
-
-function wifiTone(s: WifiSignal): Tone {
-  return s === 'STRONG' || s === 'FAIR' ? 'success' : s === 'WEAK' ? 'warning' : 'destructive'
-}
-
-function StatusChip({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: Tone }) {
-  return (
-    <div className={`flex items-center gap-2 rounded-lg px-2.5 py-2 ${TONE[tone]}`}>
-      <span className="shrink-0">{icon}</span>
-      <div className="min-w-0 leading-tight">
-        <p className="text-[10px] font-medium opacity-70">{label}</p>
-        <p className="text-[12px] font-bold truncate">{value}</p>
-      </div>
-    </div>
-  )
-}
 
 /* ── Detail Modal ── */
 
@@ -113,6 +45,11 @@ function DeviceDetailModal({
   useLockBodyScroll()
   const updateAlias = useUpdateAlias()
   const hasAlias = !!device.alias?.trim()
+  /* 24h 미만 꺼짐은 정상으로 연출, 4h 이상부터 WiFi만 회색 '끊김' (isSoftOff·isWifiCut 참고) */
+  const softOff = isSoftOff(device)
+  const alive = device.power || softOff
+  const dispConn: ConnectionStatus = softOff ? 'ONLINE' : device.connectionStatus
+  const wifiCut = softOff && isWifiCut(device)
   const [editingAlias, setEditingAlias] = useState(false)
   const [tempAlias, setTempAlias] = useState(device.alias ?? '')
   const [aliasError, setAliasError] = useState('')
@@ -162,7 +99,7 @@ function DeviceDetailModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <StatusBadge status={device.status} />
+            <StatusBadge status={deriveUserStatus(device)} />
             <button
               onClick={onClose}
               className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors"
@@ -234,54 +171,75 @@ function DeviceDetailModal({
 
           {/* 실시간 상태 그리드 */}
           <div className="grid grid-cols-2 gap-3">
-            {/* 전원 상태 */}
+            {/* 전원 상태 — soft-off(24h 미만 꺼짐)는 ON으로 연출 */}
             <div className="rounded-xl border border-border p-4 text-center">
               <span className="text-[11px] text-muted-foreground block mb-2">전원 상태</span>
               <div className="flex items-center justify-center gap-2">
-                {device.power ? (
+                {alive ? (
                   <Power className="h-5 w-5 text-success" />
                 ) : (
                   <PowerOff className="h-5 w-5 text-muted-foreground" />
                 )}
-                <span className={`text-[14px] font-bold ${device.power ? 'text-success' : 'text-muted-foreground'}`}>
-                  {device.power ? 'ON' : 'OFF'}
+                <span className={`text-[14px] font-bold ${alive ? 'text-success' : 'text-muted-foreground'}`}>
+                  {alive ? 'ON' : 'OFF'}
                 </span>
               </div>
             </div>
 
-            {/* 기기 동작 — connection_status */}
+            {/* 기기 동작 — connection_status (soft-off는 정상 작동으로 연출) */}
             <div className="rounded-xl border border-border p-4 text-center">
               <span className="text-[11px] text-muted-foreground block mb-2">기기 동작</span>
               <div className="flex items-center justify-center gap-2">
-                {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-5 w-5 ${connectionMeta(device.connectionStatus).color}` })}
-                <span className={`text-[14px] font-bold ${connectionMeta(device.connectionStatus).color}`}>
-                  {connectionMeta(device.connectionStatus).label}
+                {createElement(connectionMeta(dispConn).Icon, { className: `h-5 w-5 ${connectionMeta(dispConn).color}` })}
+                <span className={`text-[14px] font-bold ${connectionMeta(dispConn).color}`}>
+                  {connectionMeta(dispConn).label}
                 </span>
               </div>
             </div>
 
-            {/* WiFi 신호 */}
+            {/* WiFi 신호 — soft-off는 4h 미만 '정상' 연출, 4h 이상 회색 '끊김', 24h 이상(연결 끊김)만 '—' */}
             <div className="rounded-xl border border-border p-4 text-center">
               <span className="text-[11px] text-muted-foreground block mb-2">WiFi 신호</span>
               <div className="flex items-center justify-center gap-2">
-                <WifiSignalIcon signal={device.wifiSignal} className="h-5 w-5" />
-                <span className={`text-[14px] font-bold ${wifiSignalColor(device.wifiSignal)}`}>
-                  {WIFI_SIGNAL_LABEL[device.wifiSignal]}
-                </span>
+                {!alive ? (
+                  <>
+                    <WifiOff className="h-5 w-5 text-muted-foreground/50" />
+                    <span className="text-[14px] font-bold text-muted-foreground">—</span>
+                  </>
+                ) : softOff ? (
+                  wifiCut ? (
+                    <>
+                      <WifiOff className="h-5 w-5 text-muted-foreground" />
+                      <span className="text-[14px] font-bold text-muted-foreground">끊김</span>
+                    </>
+                  ) : (
+                    <>
+                      <Wifi className="h-5 w-5 text-success" />
+                      <span className="text-[14px] font-bold text-success">정상</span>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <WifiSignalIcon signal={device.wifiSignal} className="h-5 w-5" />
+                    <span className={`text-[14px] font-bold ${wifiSignalColor(device.wifiSignal)}`}>
+                      {WIFI_SIGNAL_LABEL[device.wifiSignal]}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* 과열 경보 — last_gpio_state. true=과열, false=정상 */}
+            {/* 과열 경보 — last_gpio_state. soft-off는 마지막 실값 유지, 24h 이상 끊김만 '—' */}
             <div className="rounded-xl border border-border p-4 text-center">
               <span className="text-[11px] text-muted-foreground block mb-2">과열 경보</span>
               <div className="flex items-center justify-center gap-2">
                 <Thermometer
-                  className={`h-5 w-5 ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
+                  className={`h-5 w-5 ${!alive ? 'text-muted-foreground/50' : device.overTemperature ? 'text-destructive' : 'text-success'}`}
                 />
                 <span
-                  className={`text-[14px] font-bold ${device.overTemperature ? 'text-destructive' : 'text-success'}`}
+                  className={`text-[14px] font-bold ${!alive ? 'text-muted-foreground' : device.overTemperature ? 'text-destructive' : 'text-success'}`}
                 >
-                  {device.overTemperature ? '과열' : '정상'}
+                  {!alive ? '—' : device.overTemperature ? '과열' : '정상'}
                 </span>
               </div>
             </div>
@@ -356,12 +314,12 @@ export default function UserHearingLoops() {
     return d.mac.toLowerCase().includes(q) || (d.alias ?? '').toLowerCase().includes(q)
   })
 
-  /* 상태 통계 */
+  /* 상태 통계 — 24h 미만 꺼짐은 '정상'으로 집계, '연결 끊김'은 24h 이상 미연결만(deriveUserStatus) */
   const stats = {
     total: devices.length,
-    normal: devices.filter((d) => d.status === 'normal').length,
-    warning: devices.filter((d) => d.status === 'warning').length,
-    error: devices.filter((d) => d.status === 'error' || d.status === 'offline').length,
+    normal: devices.filter((d) => deriveUserStatus(d) === 'normal').length,
+    warning: devices.filter((d) => deriveUserStatus(d) === 'warning').length,
+    disconnected: devices.filter((d) => d.status === 'error' || deriveUserStatus(d) === 'disconnected').length,
   }
 
   return (
@@ -410,9 +368,9 @@ export default function UserHearingLoops() {
             <XCircle className="h-5 w-5 text-destructive" />
           </div>
           <div>
-            <p className="text-[12px] text-muted-foreground">오류 / 오프라인</p>
-            <p className={`text-2xl font-bold ${stats.error > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
-              {stats.error}
+            <p className="text-[12px] text-muted-foreground">연결 끊김</p>
+            <p className={`text-2xl font-bold ${stats.disconnected > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+              {stats.disconnected}
             </p>
           </div>
         </div>
@@ -454,86 +412,13 @@ export default function UserHearingLoops() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
-            {filteredDevices.map((device) => {
-              const conn = connectionMeta(device.connectionStatus)
-              return (
-                <div
-                  key={device.id}
-                  onClick={() => setSelectedDevice(device)}
-                  className="group rounded-2xl border border-border bg-white p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
-                >
-                  {/* 헤더: 아이콘 + 타이틀 + 상태뱃지 */}
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`flex h-11 w-11 items-center justify-center rounded-xl shrink-0 ${
-                        device.status === 'normal'
-                          ? 'bg-success/10'
-                          : device.status === 'warning'
-                            ? 'bg-warning/10'
-                            : 'bg-destructive/10'
-                      }`}
-                    >
-                      <Radio
-                        className={`h-5 w-5 ${
-                          device.status === 'normal'
-                            ? 'text-success'
-                            : device.status === 'warning'
-                              ? 'text-warning'
-                              : 'text-destructive'
-                        }`}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-bold text-foreground truncate">{displayTitle(device)}</p>
-                      {device.alias?.trim() && (
-                        <p className="text-[11px] text-muted-foreground font-mono truncate">{device.mac}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <StatusBadge status={device.status} />
-                      {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
-                    </div>
-                  </div>
-
-                  {/* 상태 칩 2×2 */}
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <StatusChip
-                      icon={device.power ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
-                      label="전원"
-                      value={device.power ? 'ON' : 'OFF'}
-                      tone={device.power ? 'success' : 'muted'}
-                    />
-                    <StatusChip
-                      icon={createElement(conn.Icon, { className: 'h-4 w-4' })}
-                      label="동작"
-                      value={conn.label}
-                      tone={connTone(device.connectionStatus)}
-                    />
-                    <StatusChip
-                      icon={device.wifiSignal === 'DISCONNECTED' ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
-                      label="WiFi"
-                      value={WIFI_SIGNAL_LABEL[device.wifiSignal]}
-                      tone={wifiTone(device.wifiSignal)}
-                    />
-                    <StatusChip
-                      icon={<Thermometer className="h-4 w-4" />}
-                      label="과열"
-                      value={device.overTemperature ? '과열' : '정상'}
-                      tone={device.overTemperature ? 'destructive' : 'success'}
-                    />
-                  </div>
-
-                  {/* 푸터: 존 + 최근 업데이트 */}
-                  <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1 truncate">
-                      <Building2 className="h-3 w-3 shrink-0" />
-                      {device.telecoilZoneName ?? '—'}
-                    </span>
-                    <span className="shrink-0">{formatDateTime(device.lastUpdated)}</span>
-                  </div>
-                </div>
-              )
-            })}
+            {filteredDevices.map((device) => (
+              <UserDeviceCard
+                key={device.id}
+                device={device}
+                onClick={() => setSelectedDevice(device)}
+              />
+            ))}
           </div>
         )}
       </div>
