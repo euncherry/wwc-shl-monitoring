@@ -57,12 +57,10 @@ function CompareLine({ label, current, target }: { label: string; current: strin
 
 export function OtaUpdateModal({
   macs,
-  defaultFirmwareId,
   zoneName,
   onClose,
 }: {
   macs: string[]
-  defaultFirmwareId?: number | null
   zoneName?: string
   onClose: () => void
 }) {
@@ -70,12 +68,12 @@ export function OtaUpdateModal({
   const { data: firmwares, isLoading: fwLoading } = useFirmwares()
   const { data: devices } = useDevices()
 
-  const [selectedFwId, setSelectedFwId] = useState<number | null>(defaultFirmwareId ?? null)
+  const [selectedFwId, setSelectedFwId] = useState<number | null>(null)
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(false)
   const [progress, setProgress] = useState<Record<string, DeviceProgress>>({})
 
-  // 기본 선택 = 전달된 기본값 ‖ 최신(목록 정렬상 첫 번째)
+  // 기본 선택 = 최신(목록 정렬상 첫 번째)
   const effectiveFwId = selectedFwId ?? firmwares?.[0]?.id ?? null
   const firmware = firmwares?.find((f) => f.id === effectiveFwId) ?? null
 

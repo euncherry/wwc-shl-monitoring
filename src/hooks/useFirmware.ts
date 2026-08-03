@@ -47,13 +47,6 @@ export function useUploadFirmware() {
   })
 }
 
-/** 개별 기기 업데이트 전송 (POST /firmware/:id/send/:mac) */
-export function useSendFirmwareUpdate() {
-  return useMutation({
-    mutationFn: ({ id, mac }: { id: number; mac: string }) => firmwareApi.sendUpdate(id, mac),
-  })
-}
-
 /** 기기 업데이트 세션 목록 (GET /firmware/:mac/sessions) */
 export function useDeviceUpdateSessions(
   mac: string | undefined,

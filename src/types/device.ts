@@ -153,25 +153,6 @@ export interface StatusLogPageDto {
   limit: number
 }
 
-export type AlertLevel = 'critical' | 'warning' | 'info'
-export type AlertType = '온도 이상' | '전원 차단' | '볼륨 이상' | '연결 끊김' | '펌웨어 업데이트 필요'
-export type AlertState = 'pending' | 'forwarded' | 'dismissed'
-
-export interface SystemAlert {
-  id: string
-  type: AlertType
-  level: AlertLevel
-  message: string
-  deviceId: string
-  deviceMac: string
-  telecoilZoneId: string | null
-  telecoilZoneName: string | null
-  state: AlertState
-  createdAt: string
-  processedAt: string | null
-  processedBy: string | null
-}
-
 /** GET /devices/:mac/errors — 기기 자체 에러 로그 */
 export interface DeviceErrorLog {
   id: number
