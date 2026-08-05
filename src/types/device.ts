@@ -30,6 +30,9 @@ export interface HearingLoop {
   wifiRssi?: number | null
   /** 접속 중인 Wi-Fi SSID (REAL). 구펌웨어·미연결이면 null → UI에서 미표시 */
   wifiSsid?: string | null
+  /** 설치 위치 (WGS84). 미지정이면 null — 지도뷰에서 제외 */
+  latitude: number | null
+  longitude: number | null
   temperature: number
   volume: number
   firmwareVersion: string
@@ -108,6 +111,10 @@ export interface DeviceResponseDto {
   /** 기기가 접속 중인 Wi-Fi SSID (REAL — 75e1841, 펌웨어 2026-07-13 StatusReport.wifi_ssid).
    *  구펌웨어(미전송)·미연결이면 null. 비밀번호·인증정보는 프로토콜상 전송되지 않음. */
   wifi_ssid?: string | null
+  /** 설치 위치 위도 (REAL — 334dfb1, WGS84). 미지정이면 null. optional인 이유: prod 백엔드 반영 전 호환 */
+  latitude?: number | null
+  /** 설치 위치 경도 (REAL — 334dfb1, WGS84). 미지정이면 null */
+  longitude?: number | null
   /** 펌웨어 불일치 — 업데이트 도중 WiFi MCU·HL MCU 중 하나만 성공 시 true */
   firmware_inconsistent: boolean
   zone: ZoneSummary | null

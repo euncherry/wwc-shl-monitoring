@@ -39,6 +39,8 @@ export function toHearingLoop(dto: DeviceApiResponse): HearingLoop {
     wifiSignal: dto.wifi_signal ?? 'DISCONNECTED',
     wifiRssi: dto.wifi_rssi_dbm ?? null,
     wifiSsid: dto.wifi_ssid ?? null,
+    latitude: dto.latitude ?? null,
+    longitude: dto.longitude ?? null,
     temperature: dto.last_temperature ?? 0,
     volume: dto.volume ?? 0,
     firmwareVersion: dto.firmware?.version ?? '',

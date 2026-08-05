@@ -6,6 +6,16 @@ export interface CreateDeviceInput {
   mac_address: string
   zone_id?: number
   alias?: string
+  /** 설치 위치 (WGS84, 선택) */
+  latitude?: number
+  longitude?: number
+}
+
+/** PATCH /devices/:mac 입력 (UpdateDeviceDto) — undefined=미변경, 좌표는 null=제거 */
+export interface UpdateDeviceInput {
+  alias?: string
+  latitude?: number | null
+  longitude?: number | null
 }
 
 /** 기기 도메인 엔드포인트(REAL). MSW가 응답에 목 필드를 병합할 수 있음. */
@@ -46,6 +56,12 @@ export const devicesApi = {
   /** DELETE /devices/:id — 키는 숫자 id */
   remove: async (id: number) => {
     await apiClient.delete(`/devices/${id}`)
+  },
+
+  /** PATCH /devices/:mac — 별칭·설치 좌표 수정. 409 = 별칭 중복 */
+  update: async (mac: string, input: UpdateDeviceInput) => {
+    const { data } = await apiClient.patch<DeviceApiResponse>(`/devices/${mac}`, input)
+    return data
   },
 
   /** PATCH /devices/:mac { alias } — 409 = 별칭 중복 */

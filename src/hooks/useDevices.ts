@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { devicesApi, type CreateDeviceInput } from '@/api/devices'
+import { devicesApi, type CreateDeviceInput, type UpdateDeviceInput } from '@/api/devices'
 import { toHearingLoop } from '@/lib/deviceMapper'
 
 /** 기기 쿼리 키 */
@@ -67,6 +67,16 @@ export function useDeleteDevice() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => devicesApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: deviceKeys.all }),
+  })
+}
+
+/** 기기 수정 (PATCH /devices/:mac) — 별칭·설치 좌표. 좌표는 null=제거 */
+export function useUpdateDevice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ mac, input }: { mac: string; input: UpdateDeviceInput }) =>
+      devicesApi.update(mac, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: deviceKeys.all }),
   })
 }

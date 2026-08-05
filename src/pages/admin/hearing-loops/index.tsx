@@ -32,6 +32,8 @@ import {
   RefreshCw,
   ChevronLeft,
   Download,
+  List,
+  Map as MapIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { HearingLoop, DeviceStatusLogDto, DeviceLogDto, DeviceLogLevel, DeviceErrorLog } from '@/types/device'
@@ -42,6 +44,7 @@ import {
   deviceKeys,
   useDevices,
   useUpdateAlias,
+  useUpdateDevice,
   useDeleteDevice,
   useCreateDevicesBulk,
   useAssignZone,
@@ -56,6 +59,7 @@ import { useAlerts, alertKeys } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 import { useZones } from '@/hooks/useZones'
 import { OtaUpdateModal } from './OtaUpdateModal'
+import { DeviceMap } from '@/components/map/DeviceMap'
 import {
   AdminDeviceTableHead,
   AdminDeviceTableRow,
@@ -629,6 +633,7 @@ export function DeviceDetailModal({
   }
 
   const updateAlias = useUpdateAlias()
+  const updateDevice = useUpdateDevice()
   const deleteDevice = useDeleteDevice()
   const assignZone = useAssignZone()
   const { data: zones, isLoading: zonesLoading } = useZones()
@@ -659,6 +664,56 @@ export function DeviceDetailModal({
           setDisplayZone({ id: Number(assignZoneId), name: z?.name ?? `구역 ${assignZoneId}` })
           setEditingZone(false)
         },
+      },
+    )
+  }
+
+  /* 설치 좌표 (지도뷰용, WGS84) — 별칭과 같은 로컬 표시 패턴 */
+  const [displayCoords, setDisplayCoords] = useState<{ lat: number; lng: number } | null>(
+    device.latitude != null && device.longitude != null
+      ? { lat: device.latitude, lng: device.longitude }
+      : null,
+  )
+  const [editingCoords, setEditingCoords] = useState(false)
+  const [latInput, setLatInput] = useState('')
+  const [lngInput, setLngInput] = useState('')
+  const [coordError, setCoordError] = useState('')
+
+  const startCoordEdit = () => {
+    setLatInput(displayCoords ? String(displayCoords.lat) : '')
+    setLngInput(displayCoords ? String(displayCoords.lng) : '')
+    setCoordError('')
+    setEditingCoords(true)
+  }
+
+  const saveCoords = () => {
+    const lat = Number(latInput)
+    const lng = Number(lngInput)
+    if (!latInput.trim() || !lngInput.trim() || Number.isNaN(lat) || Number.isNaN(lng)) {
+      setCoordError('위도·경도를 숫자로 입력해주세요.')
+      return
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setCoordError('범위를 벗어났습니다 (위도 -90~90, 경도 -180~180).')
+      return
+    }
+    setCoordError('')
+    updateDevice.mutate(
+      { mac: device.mac, input: { latitude: lat, longitude: lng } },
+      {
+        onSuccess: () => { setDisplayCoords({ lat, lng }); setEditingCoords(false) },
+        onError: () => setCoordError('좌표 저장에 실패했습니다.'),
+      },
+    )
+  }
+
+  const clearCoords = () => {
+    setCoordError('')
+    updateDevice.mutate(
+      { mac: device.mac, input: { latitude: null, longitude: null } },
+      {
+        onSuccess: () => { setDisplayCoords(null); setEditingCoords(false) },
+        onError: () => setCoordError('좌표 제거에 실패했습니다.'),
       },
     )
   }
@@ -955,6 +1010,81 @@ export function DeviceDetailModal({
                   </span>
                 </div>
               ))}
+
+              {/* 설치 좌표 (WGS84) — 지도 보기 마커 위치. 미지정이면 지도에서 제외 */}
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-[13px] text-muted-foreground">설치 좌표</span>
+                  </div>
+                  {!editingCoords && (
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[13px] font-semibold tabular-nums ${displayCoords ? 'text-foreground' : 'text-warning'}`}>
+                        {displayCoords ? `${displayCoords.lat}, ${displayCoords.lng}` : '미지정'}
+                      </span>
+                      <button
+                        onClick={startCoordEdit}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/5 transition-colors"
+                      >
+                        <Pencil className="h-3 w-3" /> 수정
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {editingCoords && (
+                  <div className="mt-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="위도 (예: 37.5514247)"
+                        value={latInput}
+                        disabled={updateDevice.isPending}
+                        onChange={(e) => setLatInput(e.target.value)}
+                        className="w-[170px] rounded-lg border border-border bg-white px-3 py-2 text-[12px] tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="경도 (예: 127.04611)"
+                        value={lngInput}
+                        disabled={updateDevice.isPending}
+                        onChange={(e) => setLngInput(e.target.value)}
+                        className="w-[170px] rounded-lg border border-border bg-white px-3 py-2 text-[12px] tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                      <button
+                        onClick={saveCoords}
+                        disabled={updateDevice.isPending}
+                        className="rounded-lg bg-primary px-3.5 py-2 text-[12px] font-bold text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
+                      >
+                        {updateDevice.isPending ? '저장중' : '저장'}
+                      </button>
+                      <button
+                        onClick={() => { setEditingCoords(false); setCoordError('') }}
+                        disabled={updateDevice.isPending}
+                        className="rounded-lg px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50"
+                      >
+                        취소
+                      </button>
+                      {displayCoords && (
+                        <button
+                          onClick={clearCoords}
+                          disabled={updateDevice.isPending}
+                          className="rounded-lg px-3 py-2 text-[12px] font-semibold text-destructive hover:bg-destructive/5 transition-colors disabled:opacity-50"
+                        >
+                          제거
+                        </button>
+                      )}
+                    </div>
+                    {coordError && (
+                      <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-destructive">
+                        <AlertCircle className="h-3 w-3" /> {coordError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1412,6 +1542,7 @@ export default function HearingLoopsPage() {
   const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest')
   const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
   const [listSpin, setListSpin] = useState(0) // 목록 새로고침 클릭마다 +1 → 아이콘 1회전
+  const [view, setView] = useState<'list' | 'map'>('list') // 목록/지도 보기 토글
   const [showRegister, setShowRegister] = useState(false)
   const [otaMode, setOtaMode] = useState(false)
   const [otaSelected, setOtaSelected] = useState<Set<string>>(new Set())
@@ -1439,6 +1570,29 @@ export default function HearingLoopsPage() {
     map.forEach((v, id) => items.push({ key: id, label: v.name, count: v.count }))
     return items
   }, [all])
+
+  /* 존 필터 pill 버튼들 — 목록/지도 두 모드에서 공용 */
+  const zonePillButtons = zoneFilterItems.map((item) => {
+    const isActive = zoneFilter === item.key
+    return (
+      <button
+        key={item.key}
+        onClick={() => setZoneFilter(item.key)}
+        className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-all ${
+          isActive
+            ? 'border-primary text-primary bg-white shadow-sm'
+            : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-page'
+        }`}
+      >
+        {item.label}
+        <span className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+          isActive ? 'bg-primary/10 text-primary' : 'bg-page text-muted-foreground/70'
+        }`}>
+          {item.count}
+        </span>
+      </button>
+    )
+  })
 
   /* 존 필터 적용 */
   const zoneBaseList = useMemo(() => {
@@ -1548,6 +1702,18 @@ export default function HearingLoopsPage() {
           <RefreshCw className="h-3.5 w-3.5 transition-transform duration-500 ease-out" style={{ transform: `rotate(${listSpin * 360}deg)` }} />
           새로고침
         </button>
+
+        <button
+          onClick={() => setView(view === 'list' ? 'map' : 'list')}
+          className={`flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-[12px] font-semibold transition-colors ${
+            view === 'map'
+              ? 'border-primary bg-primary/5 text-primary'
+              : 'border-border bg-white text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {view === 'list' ? <MapIcon className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}
+          {view === 'list' ? '지도 보기' : '목록 보기'}
+        </button>
       </div>
 
       {/* ─── OTA 모드 액션 바 ─── */}
@@ -1585,32 +1751,22 @@ export default function HearingLoopsPage() {
         </div>
       )}
 
-      {/* ─── Table ─── */}
+      {/* ─── Table / Map ─── */}
+      {view === 'map' ? (
+        <>
+          {/* 존 필터 (지도 모드) — 검색·정렬·필터가 지도 마커에 그대로 적용됨 */}
+          <div className="flex items-center gap-1 rounded-2xl border border-border bg-white px-5 py-3 shadow-sm overflow-x-auto scrollbar-thin">
+            <Building2 className="mr-1.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            {zonePillButtons}
+          </div>
+          <DeviceMap devices={filteredDevices} onSelect={setSelectedDevice} />
+        </>
+      ) : (
       <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
         {/* Telecoil-zone filter pills (가로 스크롤) */}
         <div className="flex items-center gap-1 border-b border-border px-5 pb-3 pt-4 overflow-x-auto scrollbar-thin">
           <Building2 className="mr-1.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          {zoneFilterItems.map((item) => {
-            const isActive = zoneFilter === item.key
-            return (
-              <button
-                key={item.key}
-                onClick={() => setZoneFilter(item.key)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-all ${
-                  isActive
-                    ? 'border-primary text-primary bg-white shadow-sm'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-page'
-                }`}
-              >
-                {item.label}
-                <span className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
-                  isActive ? 'bg-primary/10 text-primary' : 'bg-page text-muted-foreground/70'
-                }`}>
-                  {item.count}
-                </span>
-              </button>
-            )
-          })}
+          {zonePillButtons}
         </div>
 
         <div className="hidden md:block overflow-x-auto scrollbar-thin">
@@ -1706,6 +1862,7 @@ export default function HearingLoopsPage() {
           </span>
         </div>
       </div>
+      )}
 
       {/* ─── Modals ─── */}
       {selectedDevice && (
