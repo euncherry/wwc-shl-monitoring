@@ -6,34 +6,25 @@ import { loadKakaoMap } from '@/lib/kakaoMapLoader'
 /* ══════════════════════════════════════════════════════
    기기 위치 지도 (카카오맵) — 관리자 히어링루프 관리의 지도 보기.
    - 좌표(latitude/longitude)가 있는 기기만 마커로 표시 (없으면 '위치 미지정'으로 집계)
-   - 마커 색 = connection_status (성적서 ② 표시 정책과 동일: 🟢정상 작동/🔵업데이트 중/⚪작동 중지)
+   - 마커 아이콘 2종: 정상 작동(파란 핀) / 작동 중지(검정 핀).
+     UPDATING은 기기가 살아있는 상태라 정상 작동 아이콘으로 표시한다.
    - 마커 클릭 → 기존 기기 상세 모달(onSelect) 재사용
    ══════════════════════════════════════════════════════ */
 
 /** 성동구청 인근 — 마커가 하나도 없을 때의 기본 중심 */
 const DEFAULT_CENTER = { lat: 37.5636, lng: 127.0367 }
 
-const STATUS_COLOR: Record<ConnectionStatus, string> = {
-  ONLINE: '#10b981',   // --color-success
-  UPDATING: '#246BD1', // --color-primary
-  OFFLINE: '#64748b',  // --color-muted-foreground
+/** 마커 아이콘 (public/markers/) — 원본 99×132(3x), 표시 33×44px로 원본 비율 유지.
+ *  앵커는 핀 꼬리 끝(하단 중앙) — 좌표점에 정확히 꽂히도록. */
+const MARKER_SRC: Record<'online' | 'offline', string> = {
+  online: '/markers/marker-online.png',
+  offline: '/markers/marker-offline.png',
 }
+const MARKER_W = 33
+const MARKER_H = 44
 
-/** 상태색 원형 핀 (CustomOverlay용 DOM). Tailwind 대신 인라인 스타일 — 오버레이는 지도 내부 DOM이라 명시적으로 준다 */
-function buildMarkerEl(device: HearingLoop, onClick: () => void): HTMLElement {
-  const label = device.alias?.trim() || device.mac
-  const el = document.createElement('button')
-  el.type = 'button'
-  el.title = label
-  el.setAttribute('aria-label', label)
-  el.style.cssText = [
-    'width:22px', 'height:22px', 'border-radius:9999px',
-    `background:${STATUS_COLOR[device.connectionStatus] ?? STATUS_COLOR.OFFLINE}`,
-    'border:3px solid #ffffff', 'box-shadow:0 1px 6px rgba(0,0,0,.35)',
-    'cursor:pointer', 'padding:0',
-  ].join(';')
-  el.addEventListener('click', onClick)
-  return el
+function markerKind(status: ConnectionStatus): 'online' | 'offline' {
+  return status === 'OFFLINE' ? 'offline' : 'online'
 }
 
 interface Props {
@@ -90,14 +81,21 @@ export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Prop
     const bounds = new kakao.maps.LatLngBounds()
     for (const device of located) {
       const pos = new kakao.maps.LatLng(device.latitude, device.longitude)
-      const overlay = new kakao.maps.CustomOverlay({
+      const kind = markerKind(device.connectionStatus)
+      const marker = new kakao.maps.Marker({
         map,
         position: pos,
-        content: buildMarkerEl(device, () => onSelect(device)),
-        yAnchor: 0.5,
-        zIndex: device.connectionStatus === 'OFFLINE' ? 1 : 2, // 가동 기기가 위로
+        title: device.alias?.trim() || device.mac,
+        image: new kakao.maps.MarkerImage(
+          MARKER_SRC[kind],
+          new kakao.maps.Size(MARKER_W, MARKER_H),
+          { offset: new kakao.maps.Point(MARKER_W / 2, MARKER_H) }, // 핀 꼬리 끝이 좌표점
+        ),
+        zIndex: kind === 'offline' ? 1 : 2, // 가동 기기가 위로
+        clickable: true,
       })
-      overlaysRef.current.push(overlay)
+      kakao.maps.event.addListener(marker, 'click', () => onSelect(device))
+      overlaysRef.current.push(marker)
       bounds.extend(pos)
     }
     map.setBounds(bounds, 48, 48, 48, 48)
@@ -110,10 +108,9 @@ export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Prop
     <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
       {/* 헤더: 범례 + 집계 */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
-        <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLOR.ONLINE }} /> 정상 작동</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLOR.UPDATING }} /> 업데이트 중</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLOR.OFFLINE }} /> 작동 중지</span>
+        <div className="flex flex-wrap items-center gap-4 text-[11px] font-semibold text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><img src={MARKER_SRC.online} alt="" className="h-5 w-auto" /> 정상 작동</span>
+          <span className="inline-flex items-center gap-1.5"><img src={MARKER_SRC.offline} alt="" className="h-5 w-auto" /> 작동 중지</span>
         </div>
         <span className="text-[12px] text-muted-foreground">
           지도 표시 <span className="font-bold text-foreground">{located.length}</span>대
