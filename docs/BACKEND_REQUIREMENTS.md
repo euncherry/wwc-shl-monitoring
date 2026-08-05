@@ -34,6 +34,7 @@
 | **기기 존 배정 해제** (구 §9) | `DELETE /devices/:id/zone` 구현됨 (ADMIN). 배정/재배치는 `PUT /devices/:id/zone/:zoneId` |
 | **펌웨어 설명** (구 §7 일부) | zip 내 `update.json`의 `updates[]`(변경 내역)로 대체 해결. 별도 `description` 컬럼 요청 폐기 |
 | **존 정상가동 집계** (구 §5-3 일부) | `ZoneResponseDto.active_device_count` 추가됨 |
+| **기기 Wi-Fi SSID** (2026-08-04) | 펌웨어 2026-07-13 `StatusReport.wifi_ssid=6` 수신 → `last_wifi_ssid` 저장 → `DeviceResponseDto.wifi_ssid` 노출 (develop `75e1841`, staging 배포됨). 구펌웨어·미연결이면 null |
 
 ---
 

@@ -147,6 +147,10 @@ export function AdminDeviceTableRow({ device, onClick, otaMode, otaChecked, onTo
           <WifiSignalIcon signal={device.wifiSignal} />
           {/* 임시: RSSI 원시값(dBm) 표시 — 신호 단계 디버깅용 */}
           <span className="text-[10px] tabular-nums text-muted-foreground">{device.wifiRssi != null ? `${device.wifiRssi}dBm` : '—'}</span>
+          {/* 접속 SSID — 신펌웨어(StatusReport.wifi_ssid) 기기만 값이 있음 */}
+          {device.wifiSsid && (
+            <span className="max-w-[96px] truncate text-[10px] text-muted-foreground" title={device.wifiSsid}>{device.wifiSsid}</span>
+          )}
         </div>
       </td>
       <td className="px-5 py-3.5 text-center">
@@ -239,6 +243,7 @@ export function AdminDeviceMobileCard({ device, onClick, otaMode, otaChecked, on
           <WifiSignalIcon signal={device.wifiSignal} />
           <span className="font-semibold text-foreground">{WIFI_SIGNAL_LABEL[device.wifiSignal]}</span>
           {device.wifiRssi != null && <span className="tabular-nums text-muted-foreground">{device.wifiRssi}dBm</span>}
+          {device.wifiSsid && <span className="max-w-[110px] truncate text-muted-foreground">{device.wifiSsid}</span>}
         </span>
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
           <Thermometer className={`h-3.5 w-3.5 ${!device.power ? 'text-muted-foreground/50' : device.overTemperature ? 'text-destructive' : 'text-success'}`} />

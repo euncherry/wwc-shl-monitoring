@@ -865,12 +865,15 @@ export function DeviceDetailModal({
               </div>
             </div>
 
-            {/* WiFi 신호 — 실값(wifi_signal) */}
+            {/* WiFi 신호 — 실값(wifi_signal). SSID는 신펌웨어(StatusReport.wifi_ssid) 기기만 표시 */}
             <div className="rounded-xl border border-border p-4">
               <span className="text-[12px] text-muted-foreground block mb-2">WiFi 신호</span>
               <div className="flex items-center gap-2">
                 <WifiSignalIcon signal={device.wifiSignal} />
                 <span className="text-sm font-bold text-foreground">{WIFI_SIGNAL_LABEL[device.wifiSignal]}</span>
+                {device.wifiSsid && (
+                  <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={device.wifiSsid}>· {device.wifiSsid}</span>
+                )}
               </div>
             </div>
 
