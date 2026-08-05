@@ -94,7 +94,7 @@ export function useAssignZone() {
   })
 }
 
-/** 존 배정 해제 (DELETE /devices/:id/zone) — 목(§13, 백엔드 엔드포인트 없음) */
+/** 존 배정 해제 (DELETE /devices/:id/zone) — 실연동(ADMIN) */
 export function useUnassignZone() {
   const qc = useQueryClient()
   return useMutation({
