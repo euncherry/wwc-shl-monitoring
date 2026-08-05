@@ -25,6 +25,7 @@ import {
   WIFI_CUT_SHOW_MS,
 } from '@/lib/userDeviceDisplay'
 import { useDevices } from '@/hooks/useDevices'
+import { useAlertThresholds } from '@/hooks/useAlerts'
 import { useAuthStore } from '@/stores/authStore'
 import { formatDateTime } from '@/lib/format'
 
@@ -212,6 +213,51 @@ function PolicyTable({ head, rows }: { head: string; rows: { label: string; view
   )
 }
 
+/** ② 장애 알림 임계값 — 모니터링 웹에서 조정 가능함을 보여준다 (관리자 로그인 시 실서버 현재값 조회) */
+function OperationThresholdBlock() {
+  const isAdmin = useAuthStore((s) => s.isAuthenticated && s.user?.role === 'admin')
+  const thresholdsQ = useAlertThresholds(isAdmin)
+  return (
+    <div className="mt-4 rounded-xl border border-border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] font-bold text-foreground">장애 알림 임계값 — 관리자 알림센터 → 알림 설정에서 조정 가능</p>
+        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-bold text-primary">
+          {isAdmin
+            ? thresholdsQ.isLoading
+              ? '현재 설정값 조회 중…'
+              : thresholdsQ.data
+                ? `현재 설정값: ${thresholdsQ.data.connection_lost_hours}시간 (실서버 조회)`
+                : '현재 설정값 조회 실패'
+            : '관리자 로그인 시 현재 설정값을 실서버에서 조회해 표시'}
+        </span>
+      </div>
+      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+        백엔드 서버가 <span className="font-semibold text-foreground">30분 주기</span>로 전체 기기를 자동 점검해, 미연결이 임계값(기본 4시간) 이상
+        지속된 기기에 '연결 끊김' 장애 알림(긴급)을 자동 생성합니다. 사용자 페이지의 '연결 끊김' 표시 기준(24시간)은 화면 표시 정책으로
+        고정이며 이 설정과 무관합니다.
+      </p>
+      <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+        <table className="w-full">
+          <tbody className="divide-y divide-border/50 text-[12px]">
+            <tr>
+              <td className="whitespace-nowrap px-3 py-2 font-mono">GET /alerts/settings/thresholds</td>
+              <td className="px-3 py-2 text-muted-foreground">현재 임계값 조회 (관리자 전용)</td>
+            </tr>
+            <tr>
+              <td className="whitespace-nowrap px-3 py-2 font-mono">PATCH /alerts/settings/thresholds</td>
+              <td className="px-3 py-2 text-muted-foreground">임계값 수정 (관리자 전용)</td>
+            </tr>
+            <tr>
+              <td className="whitespace-nowrap px-3 py-2 font-mono">connection_lost_hours</td>
+              <td className="px-3 py-2 text-muted-foreground">임계값(시간, 최솟값 1) — 이 시간 이상 미연결 시 알림 생성</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 /** 항목 1개(전원/동작/네트워크)의 표시 정책 — 관리자 / 사용자 각각 실제 렌더로 보여준다 */
 function ItemPolicySection({
   item,
@@ -220,6 +266,7 @@ function ItemPolicySection({
   adminNote,
   adminRows,
   userRows,
+  extra,
 }: {
   item: SpecItem
   title: string
@@ -227,6 +274,7 @@ function ItemPolicySection({
   adminNote: string
   adminRows: { label: string; device: HearingLoop }[]
   userRows: { label: string; device: HearingLoop }[]
+  extra?: ReactNode
 }) {
   const m = SPEC_ITEM[item]
   return (
@@ -256,6 +304,7 @@ function ItemPolicySection({
           </p>
         </div>
       </div>
+      {extra}
     </section>
   )
 }
@@ -541,13 +590,14 @@ export default function StatusSpecPage() {
 
         <ItemPolicySection
           item="operation"
-          title="기기 동작 여부 (정상 작동 / 업데이트 중 / 작동 중지)"
+          title="기기 동작 여부 (정상 작동 / 작동 중지)"
           basis={
             <>
-              연결 상태(<span className="font-mono font-semibold">connection_status</span>)와 연결이 끊긴 시각
-              (<span className="font-mono font-semibold">disconnected_at</span>). 끊기면 시각을 기록하고 재연결 시 초기화하며, 이 시각으로 미연결 지속 시간을 계산한다.
+              연결이 끊기면 백엔드가 끊긴 시각(<span className="font-mono font-semibold">disconnected_at</span>)을 기록하고 재연결 시
+              초기화하며, 이 시각으로 <span className="font-semibold text-foreground">미연결 지속 시간</span>을 계산해 기기 동작 여부를 판단한다.
             </>
           }
+          extra={<OperationThresholdBlock />}
           adminNote="연결이 끊기면 즉시 '작동 중지'로 표시합니다. 펌웨어 원격 업데이트(OTA)가 진행 중이면 '업데이트 중'으로 구분됩니다."
           adminRows={[
             { label: 'ONLINE', device: connCases[0] },
