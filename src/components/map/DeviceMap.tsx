@@ -54,11 +54,12 @@ function buildInfoWindow(
   const routeUrl = `https://map.kakao.com/link/to/${encodeURIComponent(title)},${device.latitude},${device.longitude}`
 
   const el = document.createElement('div')
+  // yAnchor=1(하단 기준) + 핀 높이만큼 margin-bottom → 말풍선이 핀 바로 위에 뜨고 꼬리가 핀을 가리킴
   el.style.cssText = [
     'position:relative', 'width:250px', 'background:#ffffff',
     'border:1px solid #e2e8f0', 'border-radius:12px',
     'box-shadow:0 6px 20px rgba(15,23,42,.18)', 'padding:12px 12px 10px',
-    'font-family:inherit', 'margin-bottom:8px',
+    'font-family:inherit', `margin-bottom:${MARKER_H + 8}px`,
   ].join(';')
 
   el.innerHTML = `
