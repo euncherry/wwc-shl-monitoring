@@ -228,6 +228,7 @@ GET    /devices/:mac        (ADMIN|구역)
 GET    /devices/:mac/status?page=&limit= → { data, total, page, limit }
 PATCH  /devices/:mac        (ADMIN|구역)  { alias? }            // alias 중복 시 409
 PUT    /devices/:id/zone/:zoneId (ADMIN)                      // ⚠️ zoneId는 경로 파라미터, body 없음. 실연동(목 아님)
+DELETE /devices/:id/zone         (ADMIN)                      // 배정 해제(미배정으로). 실연동
 DELETE /devices/:id         (ADMIN)
 
 POST   /firmware            (ADMIN)      multipart { version, file }   // description 없음
@@ -253,7 +254,7 @@ POST   /firmware/:id/send/:mac (ADMIN)
 - ~~기기 확장 텔레메트리(power/network/volume/펌웨어버전)~~ → **REAL로 전환됨**: 전원·동작·연결=`connection_status`, Wi-Fi=`wifi_signal`, 과열=`last_gpio_state`, 펌웨어=`firmware_version`. **볼륨은 신호 없어 제거**, 온도값은 무의미해 미표시.
 - ~~펌웨어 description / 진행률·이력~~ → **REAL**(description 포함, SSE 진행률 + 세션 이력/로그). 전체 전송(broadcast)은 여전히 없음.
 - **텔레코일존 확장** — `address`, `phone`는 목(Zone 엔티티에 없음). 통합 생성 = FE 오케스트레이션(`POST /zones` → `POST /users`). `managerEmail`은 `zone.user`에 없어 `GET /users/:id` 보강.
-- **기기 배정 해제** — 전용 엔드포인트 없음(`PUT /devices/:id/zone/:zoneId`는 배정·재배치만). 해제는 목/세션 오버라이드.
+- ~~기기 배정 해제~~ → **REAL로 전환됨**(`DELETE /devices/:id/zone`, ADMIN). 목·세션 오버라이드 제거.
 - **정보관리** — 기관 주소/대표번호, 담당자 부서(User에 `department` 없음).
 - **`wifi_rssi_dbm`** — 백엔드 임시 추가(신호 단계 디버깅용). FE도 임시 표시 중 → 검증 후 제거.
 
@@ -317,7 +318,7 @@ src/
 - [ ] ✅ **[3B 확정] 텔레코일존+계정 통합 생성** (2026-06-04 사용자 최종 결정) — **계정은 선택(optional)**. 등록 UI 유지 + **FE 오케스트레이션**: `POST /zones {name}` 성공 후, 계정 정보가 입력됐으면 `POST /users {…, zone_id, role:ZONE_USER}`를 **한 번 더** 호출. 계정 비우면 존만 생성하고 **상세 모달에서 나중에 계정 생성** 가능. **'목' 표시**(통합 트랜잭션 엔드포인트 대기 — 배포되면 단일 호출로 교체, 이때 '목' 배지 제거). 1:1 관계는 백엔드 `Zone↔User` OneToOne으로 보장. — `§5-2`
 - [ ] 🟡 **[3B] `GET /zones` 응답 보강 요청(목)** — user는 **email만** 필요(현재 `id/username/name/role`만 옴, email 없음) · device는 **`deviceCount`(포함 장비 수) + `activeDeviceCount`(정상 가동 수)** 추가 요청. FE 우회: deviceCount=`devices.length`, **activeCount=`connection_status==='ONLINE'` 파생**, managerEmail=`GET /users/:id` 보강. 카드 stat=전체장비/정상가동만.
 - [ ] 🟡 **[3B] 존 상세 기기 텔레메트리** — 존 상세 칩은 `GET /devices`(존 필터)로 전원/동작/Wi-Fi/과열/펌웨어 실값 표시(connection_status·wifi_signal·gpio). 별도 보강 불필요.
-- [ ] 🟡 **[3B] 기기 배정 해제 엔드포인트 요청** — 현재 없음(`PUT /devices/:id/zone/:zoneId`는 배정·재배치만). 해제는 **'목'으로 구현**(세션 오버라이드). 백엔드 추가 시 실연동.
+- [x] ✅ **기기 배정 해제 → 실연동 완료** `DELETE /devices/:id/zone`(ADMIN). staging·prod 배포 확인. 텔레코일존 관리(확인 모달)·히어링루프 상세 모달 양쪽에서 호출.
 - [ ] 기관 주소/대표번호(Zone 확장) → 목 제거 — `§5-1`
 - [ ] 기기 별칭(nickname) → 목 제거 — `§4`
 - [x] ✅ **StatusReport 확장(전원/동작/네트워크/Wi-Fi) → 실값 전환 완료** — `connection_status`(전원·동작·연결) + `wifi_signal`(신호 강도) 실연동. '목' 배지 제거. **볼륨은 신호 없어 표시 제거**(목도 폐기).
@@ -329,7 +330,7 @@ src/
 - [x] ✅ **정상가동·가동률 = ONLINE 기준 실연동.** `connection_status==='ONLINE'` 카운트로 가동률·정상가동 집계. (전체 장비 수=`devices.length` 실값)
 - [x] ✅ **온도(`last_temperature`) = 무의미 확정.** 온도 센서 없음(하드웨어팀 확정). `last_gpio_state`는 **동작이 아니라 과열(Over Temperature) 경보**(1=과열). UI에서 온도(℃) 표기 제거, '과열 경보'로 대체.
 - [x] ✅ **기기 존 배정 → 실연동 완료** `PUT /devices/:id/zone/:zoneId`(zoneId 경로 파라미터, body 없음, ADMIN). MSW 존배정 목·오버라이드·'목' 배지 제거함. 브라우저에서 `PUT /devices/1/zone/1 → 200` 확인. — `§9`
-  - ⚠️ **존 배정 해제(미배정으로 되돌리기)는 엔드포인트 없음** — `:zoneId`가 필수 경로 파라미터(null 불가). 해제 기능이 필요하면 백엔드 추가 요청. (재배치=다른 존으로 PUT은 가능)
+  - ✅ **존 배정 해제 = `DELETE /devices/:id/zone`**(실연동). 재배치는 다른 존으로 PUT.
 - [ ] 관리자 대시보드 상세 명세 확정 — `§11`
 - [ ] 🟢 **기기 `disconnected_at` DTO 노출 요청 중** (2026-08-03, `BACKEND_REQUIREMENTS §11`) — 유저 페이지 오프라인 표시는 **3단계**(관리자는 실시간 유지): 미연결 4h 미만=전부 정상 연출 / 4~24h=WiFi만 회색 '끊김' / 24h 이상=빨간 '연결 끊김'+진짜 상태. 현재 `last_seen_at` 인터림으로 근사 중, 필드 내려오면 FE 매퍼 폴백(`disconnected_at ?? last_seen_at`)이 자동 교체.
 - [x] ✅ online 판정 = `connection_status`(IoT lifecycle)로 해결 — 더 이상 last_seen 5분 휴리스틱 안 씀.
@@ -366,7 +367,7 @@ src/
 - **3A. 히어링루프 관리** — `src/pages/admin/hearing-loops/index.tsx`. 상세 확정안은 §아래 "3A 확정" 및 `docs/REQUIREMENTS.md` 참조.
   - 데이터: `GET /devices`·`GET /devices/:mac`(REAL), 등록 `POST /devices`+`/bulk`, 삭제 `DELETE /devices/:id`, 별칭 `PATCH /devices/:mac`(409). 전원·동작·연결=`connection_status`, Wi-Fi=`wifi_signal`, 과열=`last_gpio_state`, 펌웨어=`firmware_version` 모두 **실값**(볼륨·온도 제거). 상태 뱃지는 `connection_status`+`last_gpio_state` **파생**(백엔드 `status`=PENDING/ACTIVE와 다름).
   - 제거: OTA 탭/버튼·미배정 탭·상세모달 제어요소(조회 전용화). 식별자=alias‖MAC(friendly id 폐기). 텔레코일존 필터 추가(`GET /zones`).
-- **3B. 텔레코일존 관리** — 존 CRUD `GET/POST/PATCH/DELETE /zones`, 사용자 계정 생성/PW **재설정**(`/users`), 기기 배정 `PUT /devices/:id/zone/:zoneId`(**실연동**, 경로 파라미터). 알림 이력은 목. ⚠️ **배정 해제 엔드포인트 없음**(zoneId 필수)·**담당자 이메일은 `zone.user`에 없어 `GET /users/:id` 보강**. 목: 통합생성(존+계정 한 폼 — 단일 엔드포인트 없음 → FE 오케스트레이션[POST /zones→POST /users] 또는 목)·주소/대표번호. 카드 집계(deviceCount=`zone.devices.length`)는 **REAL**.
+- **3B. 텔레코일존 관리** — 존 CRUD `GET/POST/PATCH/DELETE /zones`, 사용자 계정 생성/PW **재설정**(`/users`), 기기 배정 `PUT /devices/:id/zone/:zoneId`(**실연동**, 경로 파라미터). 알림 이력은 목. 배정 해제 `DELETE /devices/:id/zone`(**실연동**)·⚠️ **담당자 이메일은 `zone.user`에 없어 `GET /users/:id` 보강**. 목: 통합생성(존+계정 한 폼 — 단일 엔드포인트 없음 → FE 오케스트레이션[POST /zones→POST /users] 또는 목)·주소/대표번호. 카드 집계(deviceCount=`zone.devices.length`)는 **REAL**.
 - **3C. 펌웨어 관리** — `POST/GET /firmware`(description 포함, REAL), 개별 전송 `POST /firmware/:id/send/:mac`(REAL, **ONLINE 기기만**), SSE 진행률·세션 이력(REAL). 미구현: 전체 전송(broadcast 엔드포인트 없음).
 - **3D. 알림센터** — **전부 MSW 목**(§10 `/alerts*`, 백엔드 전무).
 - **3E. 관리자 대시보드** ⛔ — 존별 요약·미배정 배정 중심. **보류: 구현 전 질문 후 진행**(§11 명세 확정).
@@ -390,8 +391,8 @@ src/
 ### 📌 백엔드 코드 직접 분석 보정 (2026-06-04, `hearingloop-server` 엔티티·컨트롤러 확인)
 실제 백엔드 소스/`docs/FRONTEND_CLAUDE.md`와 대조한 확정 사실. 충돌 시 이쪽 우선:
 - 🔴 **존 배정 = `PUT /devices/:id/zone/:zoneId`** (zoneId 경로 파라미터, **body 없음**, ADMIN). **실연동(목 아님).** 이전 `PATCH /devices/:id/zone {zone_id}` 표기는 오류. → **3A의 MSW 존배정 목을 실 `PUT` 호출로 교체 필요**(§13).
-  - **배정 해제 엔드포인트 없음**(`:zoneId` 필수, null 불가). 미배정으로 되돌리기는 백엔드 추가 필요.
-- **남은 목/미구현(2026-06-15 기준)**: Zone에 `address`/`phone`/`manager_email` 없음 · User에 `department` 없음 · Firmware broadcast(전체 전송) 엔드포인트 없음 · 기기 배정 **해제** 엔드포인트 없음 · 존+계정 **통합 생성 단일 엔드포인트 없음**(FE 오케스트레이션).
+  - **배정 해제 = `DELETE /devices/:id/zone`**(실연동, ADMIN).
+- **남은 목/미구현(2026-06-15 기준)**: Zone에 `address`/`phone`/`manager_email` 없음 · User에 `department` 없음 · Firmware broadcast(전체 전송) 엔드포인트 없음 · 존+계정 **통합 생성 단일 엔드포인트 없음**(FE 오케스트레이션).
   - ✅ 실값 전환됨: Device `connection_status`/`wifi_signal`(+`wifi_rssi_dbm` 임시)/`last_gpio_state`(과열)/`firmware_version` · **Alert 모듈**(알림센터 실연동) · Firmware `description`·진행률·세션 이력.
 - **확정 실값**: `last_gpio_state`(**과열 경보**, 동작 아님)·`connection_status`(전원·동작·연결)·`wifi_signal`·`firmware_version`·`alias`(unique)·`last_seen_at` · `GET /zones`가 `devices[]+user` 반환(deviceCount·배정기기·담당계정 REAL). ⚠️ `last_temperature`는 무의미(센서 없음), `is_connected`는 응답에서 제거됨.
 - **`device_error_log` 엔티티는 존재**하나 **조회 엔드포인트가 없어** FE가 'error' 상태를 파생할 수 없음(여전히 normal/warning/offline만 파생 가능).
