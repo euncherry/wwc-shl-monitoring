@@ -9,6 +9,9 @@ import {
   ChevronRight,
   AlertTriangle,
   Clock,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUpDown,
 } from 'lucide-react'
 import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { HearingLoop } from '@/types/device'
@@ -69,18 +72,56 @@ export function ProvisioningBadge() {
 }
 
 /** 관리자 목록 테이블 헤더 (9컬럼) */
-export function AdminDeviceTableHead() {
+/** 테이블 헤더 클릭으로 정렬 가능한 컬럼 */
+export type HeadSortKey = 'name' | 'updated'
+
+interface HeadProps {
+  /** 현재 헤더 정렬 기준. null이면 헤더 정렬이 비활성(예: 등록일 그룹 모드) */
+  sortKey?: HeadSortKey | null
+  sortDir?: 'asc' | 'desc'
+  /** 없으면 정렬 UI 자체를 렌더하지 않는다(실증 페이지 등 조회 전용 테이블) */
+  onSort?: (key: HeadSortKey) => void
+}
+
+const HEAD_CELL = 'px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
+
+export function AdminDeviceTableHead({ sortKey, sortDir = 'desc', onSort }: HeadProps) {
+  /** 정렬 가능한 헤더 셀 — 비활성 시 옅은 ↕ 힌트, 활성 시 방향 화살표 */
+  function SortHead({ column, label, hint }: { column: HeadSortKey; label: string; hint: string }) {
+    if (!onSort) return <>{label}</>
+    const active = sortKey === column
+    const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ChevronsUpDown
+    return (
+      <button
+        onClick={() => onSort(column)}
+        title={active ? hint : '클릭하여 정렬'}
+        className={`group -mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground ${active ? 'text-primary' : ''}`}
+      >
+        {label}
+        <Icon
+          className={`h-3 w-3 shrink-0 transition-colors ${
+            active ? 'text-primary' : 'text-muted-foreground/30 group-hover:text-muted-foreground'
+          }`}
+        />
+      </button>
+    )
+  }
+
   return (
     <thead>
       <tr className="bg-page/50 border-b border-border">
-        <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">기기</th>
-        <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">텔레코일존</th>
+        <th className={HEAD_CELL}>
+          <SortHead column="name" label="기기" hint={sortDir === 'asc' ? '가나다순' : '가나다 역순'} />
+        </th>
+        <th className={HEAD_CELL}>텔레코일존</th>
         <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">전원</th>
         <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">동작</th>
         <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">WiFi</th>
         <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">과열</th>
         <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">펌웨어</th>
-        <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">최근 업데이트</th>
+        <th className={HEAD_CELL}>
+          <SortHead column="updated" label="최근 업데이트" hint={sortDir === 'asc' ? '오래된순' : '최신순'} />
+        </th>
         <th className="px-5 py-3 w-12"></th>
       </tr>
     </thead>

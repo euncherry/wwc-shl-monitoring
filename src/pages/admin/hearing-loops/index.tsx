@@ -16,6 +16,7 @@ import {
   Bell,
   Trash2,
   ArrowUpDown,
+  CalendarDays,
   Pencil,
   CheckCircle2,
   Plus,
@@ -67,6 +68,7 @@ import {
   PowerIcon,
   ProvisioningBadge,
   displayTitle,
+  type HeadSortKey,
 } from '@/components/device/AdminDeviceRow'
 import type { CreateDeviceInput } from '@/api/devices'
 import type { UpdateSessionDto } from '@/types/firmware'
@@ -91,18 +93,22 @@ function useLockBodyScroll() {
    설정은 localStorage에 저장 — 상세 모달 왕복·메뉴 이동·새로고침에도 유지된다. */
 
 type SortKey = 'updated' | 'registered' | 'name'
-type SortDir = 'desc' | 'asc'
+type SortDir = 'asc' | 'desc'
 interface SortState { key: SortKey; dir: SortDir }
 
-const SORT_STORAGE_KEY = 'hl-admin-device-sort'
+// dir 의미가 바뀌어(name의 asc/desc 반전) 옛 저장값과 호환되지 않으므로 키를 v2로 올린다
+const SORT_STORAGE_KEY = 'hl-admin-device-sort-v2'
 const DEFAULT_SORT: SortState = { key: 'updated', dir: 'desc' }
 
 /** 기준별 방향 라벨 — "최신순"이 무엇 기준인지 헷갈리지 않도록 문구를 바꾼다 */
-const SORT_META: Record<SortKey, { label: string; desc: string; asc: string }> = {
-  updated: { label: '최근 업데이트', desc: '최신순', asc: '오래된순' },
-  registered: { label: '등록일', desc: '최근 등록순', asc: '먼저 등록순' },
-  name: { label: '이름', desc: '가나다순', asc: '역순' },
+const SORT_META: Record<SortKey, { label: string; asc: string; desc: string }> = {
+  updated: { label: '최근 업데이트', asc: '오래된순', desc: '최신순' },
+  registered: { label: '등록일', asc: '먼저 등록순', desc: '최근 등록순' },
+  name: { label: '이름', asc: '가나다순', desc: '가나다 역순' },
 }
+
+/** 기준을 새로 고를 때의 기본 방향 — 이름은 가나다순(asc), 날짜는 최신순(desc)이 자연스럽다 */
+const DEFAULT_DIR: Record<SortKey, SortDir> = { updated: 'desc', registered: 'desc', name: 'asc' }
 
 function loadSort(): SortState {
   try {
@@ -1681,22 +1687,27 @@ export default function HearingLoopsPage() {
         (d) => d.mac.toLowerCase().includes(q) || (d.alias?.toLowerCase().includes(q) ?? false),
       )
     }
+    const sign = sort.dir === 'asc' ? 1 : -1
     list.sort((a, b) => {
       if (sort.key === 'name') {
         // 별칭 있는 기기를 먼저 가나다순 → 별칭 없는(MAC 표시) 기기는 뒤로
         const aHas = Boolean(a.alias?.trim())
         const bHas = Boolean(b.alias?.trim())
         if (aHas !== bHas) return aHas ? -1 : 1
-        // 기본 방향(desc)=가나다순(오름차순) — 날짜 정렬과 부호가 반대
-        const sign = sort.dir === 'desc' ? 1 : -1
         return sign * displayTitle(a).localeCompare(displayTitle(b), 'ko')
       }
-      const sign = sort.dir === 'desc' ? -1 : 1
       const field = sort.key === 'registered' ? 'registeredAt' : 'lastUpdated'
       return sign * (new Date(a[field]).getTime() - new Date(b[field]).getTime())
     })
     return list
   }, [zoneBaseList, search, sort])
+
+  /** 등록일 기준 = 날짜 그룹 보기 모드 */
+  const grouped = sort.key === 'registered'
+
+  /** 테이블 헤더 클릭 — 같은 컬럼이면 방향 반전, 다른 컬럼이면 기본 방향. 그룹 모드는 자동 해제된다. */
+  const handleHeadSort = (key: HeadSortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: DEFAULT_DIR[key] }))
 
   /* 등록일 기준일 때만 날짜(KST) 그룹으로 묶는다. 그 외에는 그룹 1개(헤더 없음). */
   const deviceGroups = useMemo(() => {
@@ -1778,25 +1789,58 @@ export default function HearingLoopsPage() {
           />
         </div>
 
-        {/* 정렬 기준 */}
+        {/* 등록일 그룹 — 켜면 날짜별로 묶어 보고, 끄기는 테이블 헤더 클릭으로도 된다.
+            모바일은 테이블 헤더가 없어 아래 정렬 컨트롤을 따로 둔다. */}
+        <button
+          onClick={() =>
+            setSort(
+              grouped
+                ? { key: 'updated', dir: DEFAULT_DIR.updated }
+                : { key: 'registered', dir: DEFAULT_DIR.registered },
+            )
+          }
+          title={grouped ? '등록일 그룹 해제' : '등록일별로 묶어 보기'}
+          className={`hidden md:flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-[12px] font-semibold transition-colors ${
+            grouped
+              ? 'border-primary bg-primary/5 text-primary'
+              : 'border-border bg-white text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          등록일 그룹
+        </button>
+
+        {/* 그룹 모드일 때만 방향 전환 — 헤더로는 등록일 방향을 못 바꾸므로 */}
+        {grouped && (
+          <button
+            onClick={() => setSort({ ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}
+            className="hidden md:flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            {SORT_META.registered[sort.dir]}
+          </button>
+        )}
+
+        {/* 모바일 전용 정렬 컨트롤 (카드 목록엔 테이블 헤더가 없다) */}
         <select
           value={sort.key}
-          onChange={(e) => setSort({ key: e.target.value as SortKey, dir: 'desc' })}
+          onChange={(e) => {
+            const key = e.target.value as SortKey
+            setSort({ key, dir: DEFAULT_DIR[key] })
+          }}
           aria-label="정렬 기준"
-          className="w-full sm:w-auto cursor-pointer rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+          className="md:hidden w-full cursor-pointer rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
         >
           {(Object.keys(SORT_META) as SortKey[]).map((k) => (
             <option key={k} value={k}>{SORT_META[k].label}</option>
           ))}
         </select>
-
-        {/* 정렬 방향 */}
         <button
-          onClick={() => setSort({ ...sort, dir: sort.dir === 'desc' ? 'asc' : 'desc' })}
-          className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setSort({ ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}
+          className="md:hidden flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground transition-colors"
         >
           <ArrowUpDown className="h-3.5 w-3.5" />
-          {sort.dir === 'desc' ? SORT_META[sort.key].desc : SORT_META[sort.key].asc}
+          {SORT_META[sort.key][sort.dir]}
         </button>
 
         <button
@@ -1878,7 +1922,11 @@ export default function HearingLoopsPage() {
 
         <div className="hidden md:block overflow-x-auto scrollbar-thin">
           <table className="w-full">
-            <AdminDeviceTableHead />
+            <AdminDeviceTableHead
+                sortKey={grouped ? null : (sort.key as HeadSortKey)}
+                sortDir={sort.dir}
+                onSort={handleHeadSort}
+              />
             <tbody className="divide-y divide-border/40">
               {isLoading ? (
                 <tr>
