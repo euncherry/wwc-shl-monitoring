@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createElement, Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import axios from 'axios'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -66,6 +66,7 @@ import {
   AdminDeviceMobileCard,
   PowerIcon,
   ProvisioningBadge,
+  displayTitle,
 } from '@/components/device/AdminDeviceRow'
 import type { CreateDeviceInput } from '@/api/devices'
 import type { UpdateSessionDto } from '@/types/firmware'
@@ -84,6 +85,75 @@ function useLockBodyScroll() {
 }
 
 /* ── 기기 이력 (알림 REAL / 상태 REAL / 업데이트 REAL / 에러 REAL / 전체 합본) ── */
+
+/* ── 목록 정렬 ──
+   기준 3종 × 방향 2종. 등록일 기준일 때만 날짜 그룹 헤더를 넣는다.
+   설정은 localStorage에 저장 — 상세 모달 왕복·메뉴 이동·새로고침에도 유지된다. */
+
+type SortKey = 'updated' | 'registered' | 'name'
+type SortDir = 'desc' | 'asc'
+interface SortState { key: SortKey; dir: SortDir }
+
+const SORT_STORAGE_KEY = 'hl-admin-device-sort'
+const DEFAULT_SORT: SortState = { key: 'updated', dir: 'desc' }
+
+/** 기준별 방향 라벨 — "최신순"이 무엇 기준인지 헷갈리지 않도록 문구를 바꾼다 */
+const SORT_META: Record<SortKey, { label: string; desc: string; asc: string }> = {
+  updated: { label: '최근 업데이트', desc: '최신순', asc: '오래된순' },
+  registered: { label: '등록일', desc: '최근 등록순', asc: '먼저 등록순' },
+  name: { label: '이름', desc: '가나다순', asc: '역순' },
+}
+
+function loadSort(): SortState {
+  try {
+    const raw = localStorage.getItem(SORT_STORAGE_KEY)
+    if (!raw) return DEFAULT_SORT
+    const p = JSON.parse(raw) as SortState
+    if (p && p.key in SORT_META && (p.dir === 'desc' || p.dir === 'asc')) return p
+  } catch { /* 파싱 실패 시 기본값 */ }
+  return DEFAULT_SORT
+}
+
+function saveSort(s: SortState) {
+  try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(s)) } catch { /* 무시 */ }
+}
+
+const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토']
+
+/** 로컬(KST) 기준 날짜 키 'YYYY-MM-DD'. ⚠️ 응답은 UTC라 UTC 기준으로 묶으면 화면 날짜와 어긋난다. */
+function localDayKey(iso?: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+function dayKeyLabel(key: string): string {
+  if (!key) return '등록일 미상'
+  const d = new Date(`${key}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? key : `${key} (${WEEKDAY[d.getDay()]})`
+}
+
+/** 등록일 그룹 구분선 — 날짜를 가운데 두고 좌우로 가로선. 스크롤 시 헤더(h-16) 아래에 고정 */
+function DayDivider({ dayKey, total, online }: { dayKey: string; total: number; online: number }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="h-px flex-1 bg-border" />
+      <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] font-bold text-muted-foreground">
+        {dayKeyLabel(dayKey)}
+        <span className="text-muted-foreground/40">·</span>
+        {total}대
+        <span className="text-muted-foreground/40">·</span>
+        <span className="inline-flex items-center gap-1 text-success">
+          <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+          {online}
+        </span>
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  )
+}
 
 type HistoryTab = 'alerts' | 'status' | 'updates' | 'errors' | 'logs' | 'all'
 
@@ -1539,10 +1609,12 @@ export default function HearingLoopsPage() {
 
   const [search, setSearch] = useState('')
   const [zoneFilter, setZoneFilter] = useState<string>('all') // 'all' | 'unassigned' | zoneId
-  const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest')
   const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
   const [listSpin, setListSpin] = useState(0) // 목록 새로고침 클릭마다 +1 → 아이콘 1회전
   const [view, setView] = useState<'list' | 'map'>('list') // 목록/지도 보기 토글
+  /* 정렬 설정 — localStorage 유지(모달 왕복·메뉴 이동·새로고침에도 보존) */
+  const [sort, setSort] = useState<SortState>(loadSort)
+  useEffect(() => { saveSort(sort) }, [sort])
   const [showRegister, setShowRegister] = useState(false)
   const [otaMode, setOtaMode] = useState(false)
   const [otaSelected, setOtaSelected] = useState<Set<string>>(new Set())
@@ -1610,12 +1682,34 @@ export default function HearingLoopsPage() {
       )
     }
     list.sort((a, b) => {
-      const da = new Date(a.lastUpdated).getTime()
-      const db = new Date(b.lastUpdated).getTime()
-      return sortOrder === 'latest' ? db - da : da - db
+      if (sort.key === 'name') {
+        // 별칭 있는 기기를 먼저 가나다순 → 별칭 없는(MAC 표시) 기기는 뒤로
+        const aHas = Boolean(a.alias?.trim())
+        const bHas = Boolean(b.alias?.trim())
+        if (aHas !== bHas) return aHas ? -1 : 1
+        // 기본 방향(desc)=가나다순(오름차순) — 날짜 정렬과 부호가 반대
+        const sign = sort.dir === 'desc' ? 1 : -1
+        return sign * displayTitle(a).localeCompare(displayTitle(b), 'ko')
+      }
+      const sign = sort.dir === 'desc' ? -1 : 1
+      const field = sort.key === 'registered' ? 'registeredAt' : 'lastUpdated'
+      return sign * (new Date(a[field]).getTime() - new Date(b[field]).getTime())
     })
     return list
-  }, [zoneBaseList, search, sortOrder])
+  }, [zoneBaseList, search, sort])
+
+  /* 등록일 기준일 때만 날짜(KST) 그룹으로 묶는다. 그 외에는 그룹 1개(헤더 없음). */
+  const deviceGroups = useMemo(() => {
+    if (sort.key !== 'registered') return [{ dayKey: null as string | null, items: filteredDevices }]
+    const groups: { dayKey: string; items: HearingLoop[] }[] = []
+    for (const d of filteredDevices) {
+      const key = localDayKey(d.registeredAt)
+      const last = groups[groups.length - 1]
+      if (last && last.dayKey === key) last.items.push(d)
+      else groups.push({ dayKey: key, items: [d] })
+    }
+    return groups
+  }, [filteredDevices, sort.key])
 
   // OTA 모드 파생 — 최신 펌웨어 기준 업데이트 필요 ONLINE 기기(펌웨어 선택은 전송 모달에서)
   const latestFw = firmwares?.[0] ?? null
@@ -1684,12 +1778,25 @@ export default function HearingLoopsPage() {
           />
         </div>
 
+        {/* 정렬 기준 */}
+        <select
+          value={sort.key}
+          onChange={(e) => setSort({ key: e.target.value as SortKey, dir: 'desc' })}
+          aria-label="정렬 기준"
+          className="w-full sm:w-auto cursor-pointer rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+        >
+          {(Object.keys(SORT_META) as SortKey[]).map((k) => (
+            <option key={k} value={k}>{SORT_META[k].label}</option>
+          ))}
+        </select>
+
+        {/* 정렬 방향 */}
         <button
-          onClick={() => setSortOrder(sortOrder === 'latest' ? 'oldest' : 'latest')}
+          onClick={() => setSort({ ...sort, dir: sort.dir === 'desc' ? 'asc' : 'desc' })}
           className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowUpDown className="h-3.5 w-3.5" />
-          {sortOrder === 'latest' ? '최신순' : '오래된순'}
+          {sort.dir === 'desc' ? SORT_META[sort.key].desc : SORT_META[sort.key].asc}
         </button>
 
         <button
@@ -1804,15 +1911,30 @@ export default function HearingLoopsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredDevices.map((device) => (
-                  <AdminDeviceTableRow
-                    key={device.id}
-                    device={device}
-                    onClick={() => setSelectedDevice(device)}
-                    otaMode={otaMode}
-                    otaChecked={otaSelected.has(device.mac)}
-                    onToggleOta={() => toggleOta(device.mac)}
-                  />
+                deviceGroups.map((group) => (
+                  <Fragment key={group.dayKey ?? '__all__'}>
+                    {group.dayKey !== null && (
+                      <tr>
+                        <td colSpan={9} className="sticky top-16 z-10 bg-white/95 px-5 py-2 backdrop-blur-sm">
+                          <DayDivider
+                            dayKey={group.dayKey}
+                            total={group.items.length}
+                            online={group.items.filter((d) => d.connectionStatus === 'ONLINE').length}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                    {group.items.map((device) => (
+                      <AdminDeviceTableRow
+                        key={device.id}
+                        device={device}
+                        onClick={() => setSelectedDevice(device)}
+                        otaMode={otaMode}
+                        otaChecked={otaSelected.has(device.mac)}
+                        onToggleOta={() => toggleOta(device.mac)}
+                      />
+                    ))}
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -1841,15 +1963,28 @@ export default function HearingLoopsPage() {
             </div>
           ) : (
             <div className="space-y-3 p-4">
-              {filteredDevices.map((device) => (
-                <AdminDeviceMobileCard
-                  key={device.id}
-                  device={device}
-                  onClick={() => setSelectedDevice(device)}
-                  otaMode={otaMode}
-                  otaChecked={otaSelected.has(device.mac)}
-                  onToggleOta={() => toggleOta(device.mac)}
-                />
+              {deviceGroups.map((group) => (
+                <Fragment key={group.dayKey ?? '__all__'}>
+                  {group.dayKey !== null && (
+                    <div className="sticky top-16 z-10 -mx-4 bg-white/95 px-4 py-2 backdrop-blur-sm">
+                      <DayDivider
+                        dayKey={group.dayKey}
+                        total={group.items.length}
+                        online={group.items.filter((d) => d.connectionStatus === 'ONLINE').length}
+                      />
+                    </div>
+                  )}
+                  {group.items.map((device) => (
+                    <AdminDeviceMobileCard
+                      key={device.id}
+                      device={device}
+                      onClick={() => setSelectedDevice(device)}
+                      otaMode={otaMode}
+                      otaChecked={otaSelected.has(device.mac)}
+                      onToggleOta={() => toggleOta(device.mac)}
+                    />
+                  ))}
+                </Fragment>
               ))}
             </div>
           )}
