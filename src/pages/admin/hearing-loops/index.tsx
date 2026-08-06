@@ -49,6 +49,7 @@ import {
   useDeleteDevice,
   useCreateDevicesBulk,
   useAssignZone,
+  useUnassignZone,
   useDeviceStatusLogs,
   useDeviceErrors,
   useDeviceLogs,
@@ -712,6 +713,7 @@ export function DeviceDetailModal({
   const updateDevice = useUpdateDevice()
   const deleteDevice = useDeleteDevice()
   const assignZone = useAssignZone()
+  const unassignZone = useUnassignZone()
   const { data: zones, isLoading: zonesLoading } = useZones()
 
   const [displayAlias, setDisplayAlias] = useState<string>(device.alias ?? '')
@@ -719,6 +721,7 @@ export function DeviceDetailModal({
   const [tempAlias, setTempAlias] = useState(displayAlias)
   const [aliasError, setAliasError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmUnassign, setConfirmUnassign] = useState(false)
   const [showOta, setShowOta] = useState(false)
 
   // 배치된 텔레코일존 (미배정이면 배정 — 실연동 PUT /devices/:id/zone/:zoneId)
@@ -742,6 +745,18 @@ export function DeviceDetailModal({
         },
       },
     )
+  }
+
+  /** 배정 해제 — DELETE /devices/:id/zone (실연동) */
+  const doUnassign = () => {
+    unassignZone.mutate(Number(device.id), {
+      onSuccess: () => {
+        setDisplayZone(null)
+        setAssignZoneId('')
+        setConfirmUnassign(false)
+        setEditingZone(false)
+      },
+    })
   }
 
   /* 설치 좌표 (지도뷰용, WGS84) — 별칭과 같은 로컬 표시 패턴 */
@@ -876,7 +891,8 @@ export function DeviceDetailModal({
               )}
             </div>
             {editingZone ? (
-              <div className="flex items-center gap-2">
+              <>
+                <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <select
                     value={assignZoneId}
@@ -900,13 +916,50 @@ export function DeviceDetailModal({
                   {assignZone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 </button>
                 <button
-                  onClick={() => setEditingZone(false)}
+                  onClick={() => { setEditingZone(false); setConfirmUnassign(false) }}
                   disabled={assignZone.isPending}
                   className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-page transition-colors disabled:opacity-40"
                 >
                   <X className="h-4 w-4" />
                 </button>
-              </div>
+                </div>
+                {/* 배정 해제 — 배정된 기기에만. 삭제와 같은 인라인 확인 방식(모달 중첩 회피) */}
+                {displayZone && (
+                  confirmUnassign ? (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg bg-destructive/5 px-2.5 py-2">
+                      <span className="text-[11px] font-semibold text-destructive">
+                        「{displayZone.name}」에서 해제할까요? 해당 기관 사용자는 이 기기를 볼 수 없게 됩니다.
+                      </span>
+                      <div className="ml-auto flex items-center gap-1.5">
+                        <button
+                          onClick={doUnassign}
+                          disabled={unassignZone.isPending}
+                          className="flex items-center gap-1 rounded-lg bg-destructive px-2.5 py-1 text-[11px] font-bold text-white hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                        >
+                          {unassignZone.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                          해제
+                        </button>
+                        <button
+                          onClick={() => setConfirmUnassign(false)}
+                          disabled={unassignZone.isPending}
+                          className="rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-page transition-colors"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmUnassign(true)}
+                      disabled={assignZone.isPending}
+                      className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-destructive hover:underline transition-colors disabled:opacity-40"
+                    >
+                      <X className="h-3 w-3" />
+                      배정 해제 (미배정으로)
+                    </button>
+                  )
+                )}
+              </>
             ) : displayZone ? (
               <p className="flex items-center gap-1.5 text-[14px] font-bold text-foreground">
                 <MapPin className="h-4 w-4 text-primary" />
