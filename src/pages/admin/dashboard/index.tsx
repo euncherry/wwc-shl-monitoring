@@ -13,7 +13,11 @@ import {
 } from 'lucide-react'
 
 import bannerImg from '@/assets/banner-illustration.png'
-import mapImg from '@/assets/map-view.png'
+import { useState } from 'react'
+import { useDevices } from '@/hooks/useDevices'
+import { DeviceMap } from '@/components/map/DeviceMap'
+import { DeviceDetailModal } from '@/pages/admin/hearing-loops'
+import type { HearingLoop } from '@/types/device'
 
 /* ══════════════════════════════════════════════════════
    Dummy data
@@ -73,6 +77,10 @@ function StatusBadge({ status }: { status: 'normal' | 'warning' | 'error' }) {
    ══════════════════════════════════════════════════════ */
 
 export default function AdminDashboard() {
+  /* 지도뷰만 실연동 — 나머지 위젯은 아직 더미(2B~2F에서 순차 교체) */
+  const { data: devices = [] } = useDevices()
+  const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
+
   return (
     <div className="space-y-6">
 
@@ -129,33 +137,8 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Map area */}
-            <div className="relative bg-gradient-to-br from-main-blue-1/40 to-page" style={{ minHeight: '400px' }}>
-              <img
-                src={mapImg}
-                alt="전체 장비 지도뷰"
-                className="w-full h-full object-cover"
-                style={{ minHeight: '400px' }}
-              />
-              {/* Bottom overlay stats */}
-              {/* <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
-                {[
-                  { label: '전체', value: '100', color: 'bg-primary', ring: 'ring-primary/20' },
-                  { label: '정상', value: '98', color: 'bg-success', ring: 'ring-success/20' },
-                  { label: '경고', value: '1', color: 'bg-warning', ring: 'ring-warning/20' },
-                  { label: '오류', value: '1', color: 'bg-destructive', ring: 'ring-destructive/20' },
-                ].map((s) => (
-                  <div
-                    key={s.label}
-                    className={`flex items-center gap-2 rounded-xl bg-white/95 backdrop-blur-md px-3.5 py-2 shadow-md ring-1 ${s.ring}`}
-                  >
-                    <span className={`h-2.5 w-2.5 rounded-full ${s.color}`} />
-                    <span className="text-[11px] font-medium text-muted-foreground">{s.label}</span>
-                    <span className="text-[14px] font-extrabold text-foreground">{s.value}</span>
-                  </div>
-                ))}
-              </div> */}
-            </div>
+            {/* Map area — 히어링루프 관리와 동일한 DeviceMap(실연동) 재사용 */}
+            <DeviceMap devices={devices} onSelect={setSelectedDevice} heightClass="h-[400px]" />
           </div>
 
           {/* Telecoil Zone Summary */}
@@ -359,6 +342,11 @@ export default function AdminDashboard() {
 
         </div>
       </div>
+
+      {/* 지도 마커 '상세 보기' → 히어링루프 관리와 동일한 기기 상세 모달 */}
+      {selectedDevice && (
+        <DeviceDetailModal device={selectedDevice} onClose={() => setSelectedDevice(null)} />
+      )}
     </div>
   )
 }
