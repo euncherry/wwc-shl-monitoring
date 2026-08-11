@@ -39,6 +39,17 @@ function LinkArrow({ left, width, title }: { left: number; width: number; title:
   )
 }
 
+/** 히트맵에서 클릭한 1시간을 밴드 배경에 되짚어 주는 음영 */
+function SelectedBand({ at }: { at: { left: number; width: number } | null }) {
+  if (!at) return null
+  return (
+    <div
+      className="pointer-events-none absolute inset-y-0 bg-primary/10"
+      style={{ left: pct(at.left), width: `max(2px, ${pct(at.width)})` }}
+    />
+  )
+}
+
 /* ══════════════════════════════════════════════════════
    Main
    ══════════════════════════════════════════════════════ */
@@ -51,7 +62,8 @@ export default function DeviceTrend({ mac }: { mac: string }) {
 
   const [winMs, setWinMs] = useState<number>(BAND_WINDOW_MS)
   const [winStartMs, setWinStartMs] = useState<number | null>(null)
-  const [selectedCell, setSelectedCell] = useState<string | null>(null)
+  // 클릭한 셀 — 밴드 배경에 그 1시간을 음영으로 되짚어 준다(창을 옮겨도 남는 북마크)
+  const [selectedCell, setSelectedCell] = useState<HeatCell | null>(null)
 
   const minStart = model.rangeStartMs
   const maxStart = Math.max(model.rangeStartMs, model.rangeEndMs - winMs)
@@ -76,8 +88,24 @@ export default function DeviceTrend({ mac }: { mac: string }) {
   }
 
   const jumpTo = (cell: HeatCell) => {
-    setSelectedCell(`${cell.dayKey}#${cell.hour}`)
+    setSelectedCell(cell)
     setWinStartMs(clamp(cell.startMs + HOUR_MS / 2 - winMs / 2, minStart, maxStart))
+  }
+
+  /** 밴드 안에서의 위치(0~1). 창 밖이면 null */
+  const selectedInBand = useMemo(() => {
+    if (!selectedCell) return null
+    const s = selectedCell.startMs
+    if (s >= winEnd || s + HOUR_MS <= winStart) return null
+    return { left: clamp((s - winStart) / winMs, 0, 1), width: clamp((s + HOUR_MS - winStart) / winMs, 0, 1) - clamp((s - winStart) / winMs, 0, 1) }
+  }, [selectedCell, winStart, winEnd, winMs])
+
+  /** 히트맵 한 행(하루)에서 현재 창이 차지하는 구간. 창이 자정을 넘으면 두 행에 걸친다. */
+  const windowInDay = (dayStart: number) => {
+    const s = Math.max(winStart, dayStart)
+    const e = Math.min(winEnd, dayStart + DAY_MS)
+    if (e <= s) return null
+    return { left: (s - dayStart) / DAY_MS, width: (e - s) / DAY_MS }
   }
 
   /* ── 미니맵 드래그 ── */
@@ -183,6 +211,7 @@ export default function DeviceTrend({ mac }: { mac: string }) {
             const dayEnd = dayStart + DAY_MS
             const dayLinks: LinkSpan[] = model.links.filter((l) => l.endMs >= dayStart && l.startMs <= dayEnd)
             const isToday = dayIdx === model.days.length - 1
+            const winBar = windowInDay(dayStart)
             return (
               <div key={day.dayKey} className="flex items-center gap-1.5">
                 <span className={`w-9 shrink-0 text-[10px] leading-none ${isToday ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>
@@ -207,12 +236,19 @@ export default function DeviceTrend({ mac }: { mac: string }) {
                           className={`h-6 rounded-[3px] transition-all ${
                             future ? 'bg-transparent' : heatCellClass(cell)
                           } ${
-                            selectedCell === key ? 'ring-2 ring-primary ring-offset-1' : ''
+                            selectedCell?.startMs === cell.startMs ? 'ring-2 ring-primary ring-offset-1' : ''
                           } ${future ? 'cursor-default' : 'cursor-pointer hover:opacity-80'}`}
                         />
                       )
                     })}
                   </div>
+                  {/* 현재 밴드 창 — 셀 상단에 얹는다(하단 화살표와 대칭, 셀 색은 안 건드림) */}
+                  {winBar && (
+                    <div
+                      className="pointer-events-none absolute top-0 h-[2px] rounded-full bg-primary/60"
+                      style={{ left: pct(winBar.left), width: `max(2px, ${pct(winBar.width)})` }}
+                    />
+                  )}
                   {/* Wi-Fi 신호 수신 구간 — 셀 위 absolute 오버레이 */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[8px]">
                     {dayLinks.map((l, i) => {
@@ -274,6 +310,7 @@ export default function DeviceTrend({ mac }: { mac: string }) {
         <div className="mb-1 flex items-center gap-2">
           <span className="w-11 shrink-0 text-[10px] font-semibold text-destructive">과열</span>
           <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-page">
+            <SelectedBand at={selectedInBand} />
             {winSpans.map((s, i) => {
               const l = clamp((s.startMs - winStart) / winMs, 0, 1)
               const w = clamp((s.endMs - winStart) / winMs, 0, 1) - l
@@ -295,6 +332,8 @@ export default function DeviceTrend({ mac }: { mac: string }) {
         <div className="flex items-start gap-2">
           <span className="w-11 shrink-0 pt-1 text-[10px] font-semibold text-primary">RSSI</span>
           <div className="relative h-[72px] flex-1 overflow-hidden rounded-md bg-page">
+            {/* SVG보다 먼저 렌더해야 RSSI 선을 가리지 않는다 */}
+            <SelectedBand at={selectedInBand} />
             {RSSI_THRESHOLDS.map((v) => (
               <div
                 key={v}
