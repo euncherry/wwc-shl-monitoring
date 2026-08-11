@@ -156,9 +156,9 @@ export interface DeviceStatusLogDto {
   mac_address: string
   /** GPIO 상태 = 과열(Over Temperature) 경보. true=과열, false=정상. (동작 ON/OFF 아님) */
   gpio_state: boolean | null
-  /** 온도 °C — ⚠️ 무의미(센서 없음). 과열 여부는 gpio_state. */
-  temperature: number | null
-  /** 기기 보고 시각 */
+  /** Wi-Fi 신호 세기 원시값(dBm). ⚠️ 0은 값이 아니라 '미조회/미연결' — 백엔드도 `!rssi`로 DISCONNECTED 처리 */
+  wifi_rssi_dbm: number | null
+  /** 서버 수신 시각 (기기 전송 시각 아님 — devices.service.ts가 new Date()로 덮어씀) */
   reported_at: string
   created_at: string
 }

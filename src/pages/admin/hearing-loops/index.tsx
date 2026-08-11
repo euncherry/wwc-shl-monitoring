@@ -61,6 +61,7 @@ import { useAlerts, alertKeys } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
 import { useZones } from '@/hooks/useZones'
 import { OtaUpdateModal } from './OtaUpdateModal'
+import DeviceTrend from './DeviceTrend'
 import { DeviceMap } from '@/components/map/DeviceMap'
 import {
   AdminDeviceTableHead,
@@ -162,7 +163,7 @@ function DayDivider({ dayKey, total, online }: { dayKey: string; total: number; 
   )
 }
 
-type HistoryTab = 'alerts' | 'status' | 'updates' | 'errors' | 'logs' | 'all'
+type HistoryTab = 'alerts' | 'status' | 'updates' | 'errors' | 'logs' | 'all' | 'trend'
 
 type LogModuleFilter = 'all' | 'wifi' | 'hl'
 
@@ -462,21 +463,26 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
     return items.sort((x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime())
   }, [alerts, statusLogs, sessions, errors, allDeviceLogs])
 
-  const tabs: { key: HistoryTab; label: string; count: number }[] = [
+  // count 미지정(추이) = 뱃지 숨김. 나머지 6탭은 기존 그대로.
+  const tabs: { key: HistoryTab; label: string; count?: number }[] = [
     { key: 'alerts', label: '알림 이력', count: alerts.length },
     { key: 'status', label: '상태 이력', count: statusLogs.length },
     { key: 'updates', label: '업데이트 이력', count: sessions.length },
     { key: 'errors', label: '에러 로그', count: errors.length },
     { key: 'logs', label: '디바이스 로그', count: allDeviceLogs.length },
     { key: 'all', label: '전체보기', count: merged.length },
+    { key: 'trend', label: '추이' },
   ]
 
+  // ⚠️ 추이 탭은 자체 쿼리(useDeviceStatusRange)를 쓰므로 여기서 false로 빠져나가야 한다.
+  // 넣지 않으면 마지막 else(5개 쿼리 OR)에 걸려 다른 탭 로딩/에러에 끌려간다.
   const isLoading =
     tab === 'status' ? statusQ.isLoading
     : tab === 'alerts' ? alertsQ.isLoading
     : tab === 'updates' ? updatesQ.isLoading
     : tab === 'errors' ? errorsQ.isLoading
     : tab === 'logs' ? logsQ.isLoading
+    : tab === 'trend' ? false
     : alertsQ.isLoading || statusQ.isLoading || updatesQ.isLoading || errorsQ.isLoading || logsQ.isLoading
 
   const isError =
@@ -485,6 +491,7 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
     : tab === 'updates' ? updatesQ.isError
     : tab === 'errors' ? errorsQ.isError
     : tab === 'logs' ? logsQ.isError
+    : tab === 'trend' ? false
     : alertsQ.isError || statusQ.isError || updatesQ.isError || errorsQ.isError || logsQ.isError
 
   const moduleFilterBtns: { key: LogModuleFilter; label: string }[] = [
@@ -506,9 +513,11 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
             }`}
           >
             {t.label}
-            <span className={`text-[10px] font-bold ${tab === t.key ? 'opacity-80' : 'text-muted-foreground/60'}`}>
-              {t.count}
-            </span>
+            {t.count !== undefined && (
+              <span className={`text-[10px] font-bold ${tab === t.key ? 'opacity-80' : 'text-muted-foreground/60'}`}>
+                {t.count}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -622,6 +631,8 @@ function DeviceHistory({ deviceId, mac }: { deviceId: number; mac: string }) {
             </>
           )}
         </>
+      ) : tab === 'trend' ? (
+        <DeviceTrend mac={mac} />
       ) : merged.length ? (
         <div className="space-y-2">
           {merged.map((m) =>
