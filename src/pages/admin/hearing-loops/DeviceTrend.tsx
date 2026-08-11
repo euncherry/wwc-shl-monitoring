@@ -16,7 +16,7 @@ import {
   type HeatCell,
   type LinkSpan,
 } from '@/lib/trend'
-import { DAY_MS, HOUR_MS, formatDuration, formatKst, formatKstTime, kstShortDay } from '@/lib/kst'
+import { DAY_MS, HOUR_MS, formatDuration, formatKst, formatKstTime, kstHourStartMs, kstShortDay } from '@/lib/kst'
 
 const GRID_24 = 'grid grid-cols-[repeat(24,minmax(0,1fr))] gap-[2px]'
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
@@ -62,8 +62,8 @@ export default function DeviceTrend({ mac }: { mac: string }) {
 
   const [winMs, setWinMs] = useState<number>(BAND_WINDOW_MS)
   const [winStartMs, setWinStartMs] = useState<number | null>(null)
-  // 클릭한 셀 — 밴드 배경에 그 1시간을 음영으로 되짚어 준다(창을 옮겨도 남는 북마크)
-  const [selectedCell, setSelectedCell] = useState<HeatCell | null>(null)
+  // 히트맵에서 강조할 1시간. 셀 클릭이면 그 셀, 드래그면 창 중앙 시각의 셀로 따라간다.
+  const [focusStartMs, setFocusStartMs] = useState<number | null>(null)
 
   const minStart = model.rangeStartMs
   const maxStart = Math.max(model.rangeStartMs, model.rangeEndMs - winMs)
@@ -88,17 +88,23 @@ export default function DeviceTrend({ mac }: { mac: string }) {
   }
 
   const jumpTo = (cell: HeatCell) => {
-    setSelectedCell(cell)
+    setFocusStartMs(cell.startMs)
     setWinStartMs(clamp(cell.startMs + HOUR_MS / 2 - winMs / 2, minStart, maxStart))
+  }
+
+  /** 창을 옮길 때 강조 셀도 창 중앙 시각으로 따라간다 */
+  const moveWindow = (nextStart: number) => {
+    setWinStartMs(nextStart)
+    setFocusStartMs(kstHourStartMs(nextStart + winMs / 2))
   }
 
   /** 밴드 안에서의 위치(0~1). 창 밖이면 null */
   const selectedInBand = useMemo(() => {
-    if (!selectedCell) return null
-    const s = selectedCell.startMs
-    if (s >= winEnd || s + HOUR_MS <= winStart) return null
-    return { left: clamp((s - winStart) / winMs, 0, 1), width: clamp((s + HOUR_MS - winStart) / winMs, 0, 1) - clamp((s - winStart) / winMs, 0, 1) }
-  }, [selectedCell, winStart, winEnd, winMs])
+    if (focusStartMs === null) return null
+    if (focusStartMs >= winEnd || focusStartMs + HOUR_MS <= winStart) return null
+    const l = clamp((focusStartMs - winStart) / winMs, 0, 1)
+    return { left: l, width: clamp((focusStartMs + HOUR_MS - winStart) / winMs, 0, 1) - l }
+  }, [focusStartMs, winStart, winEnd, winMs])
 
   /** 히트맵 한 행(하루)에서 현재 창이 차지하는 구간. 창이 자정을 넘으면 두 행에 걸친다. */
   const windowInDay = (dayStart: number) => {
@@ -119,7 +125,7 @@ export default function DeviceTrend({ mac }: { mac: string }) {
     // 창 밖을 누르면 그 지점을 창 중앙으로
     const t = model.rangeStartMs + ((e.clientX - box.left) / box.width) * fullMs
     const next = t < winStart || t > winEnd ? clamp(t - winMs / 2, minStart, maxStart) : winStart
-    setWinStartMs(next)
+    moveWindow(next)
     dragRef.current = { x: e.clientX, start: next }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
@@ -128,7 +134,7 @@ export default function DeviceTrend({ mac }: { mac: string }) {
     const box = miniRef.current?.getBoundingClientRect()
     if (!d || !box) return
     const delta = ((e.clientX - d.x) / box.width) * fullMs
-    setWinStartMs(clamp(d.start + delta, minStart, maxStart))
+    moveWindow(clamp(d.start + delta, minStart, maxStart))
   }
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     dragRef.current = null
@@ -236,18 +242,24 @@ export default function DeviceTrend({ mac }: { mac: string }) {
                           className={`h-6 rounded-[3px] transition-all ${
                             future ? 'bg-transparent' : heatCellClass(cell)
                           } ${
-                            selectedCell?.startMs === cell.startMs ? 'ring-2 ring-primary ring-offset-1' : ''
+                            focusStartMs === cell.startMs ? 'ring-2 ring-foreground/70 ring-offset-1' : ''
                           } ${future ? 'cursor-default' : 'cursor-pointer hover:opacity-80'}`}
                         />
                       )
                     })}
                   </div>
-                  {/* 현재 밴드 창 — 셀 상단에 얹는다(하단 화살표와 대칭, 셀 색은 안 건드림) */}
+                  {/* 현재 밴드 창 — 셀 상단에 얹는다(셀 색은 안 건드림).
+                      하단의 '신호 수신'(파란 선 + 화살촉)과 헷갈리지 않게 색·형태를 모두 달리한다:
+                      중립 먹색 + 양 끝 세로 캡(⌐¬) */}
                   {winBar && (
                     <div
-                      className="pointer-events-none absolute top-0 h-[2px] rounded-full bg-primary/60"
-                      style={{ left: pct(winBar.left), width: `max(2px, ${pct(winBar.width)})` }}
-                    />
+                      className="pointer-events-none absolute top-0 h-[7px]"
+                      style={{ left: pct(winBar.left), width: `max(4px, ${pct(winBar.width)})` }}
+                    >
+                      <div className="absolute inset-x-0 top-0 h-[2.5px] bg-foreground/75" />
+                      <div className="absolute left-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
+                      <div className="absolute right-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
+                    </div>
                   )}
                   {/* Wi-Fi 신호 수신 구간 — 셀 위 absolute 오버레이 */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[8px]">
@@ -280,6 +292,14 @@ export default function DeviceTrend({ mac }: { mac: string }) {
           ))}
           <span className="ml-1 flex items-center gap-1">
             <span className="h-[2px] w-5 rounded-full bg-primary" />신호 수신
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="relative inline-block h-[7px] w-5">
+              <span className="absolute inset-x-0 top-0 h-[2.5px] bg-foreground/75" />
+              <span className="absolute left-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
+              <span className="absolute right-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
+            </span>
+            아래 밴드 구간
           </span>
         </div>
       </div>
