@@ -44,7 +44,7 @@ function SelectedBand({ at }: { at: { left: number; width: number } | null }) {
   if (!at) return null
   return (
     <div
-      className="pointer-events-none absolute inset-y-0 bg-primary/10"
+      className="pointer-events-none absolute inset-y-0 bg-highlight/35"
       style={{ left: pct(at.left), width: `max(2px, ${pct(at.width)})` }}
     />
   )
@@ -106,12 +106,18 @@ export default function DeviceTrend({ mac }: { mac: string }) {
     return { left: l, width: clamp((focusStartMs + HOUR_MS - winStart) / winMs, 0, 1) - l }
   }, [focusStartMs, winStart, winEnd, winMs])
 
-  /** 히트맵 한 행(하루)에서 현재 창이 차지하는 구간. 창이 자정을 넘으면 두 행에 걸친다. */
+  /** 히트맵 한 행(하루)에서 현재 창이 차지하는 구간. 창이 자정을 넘으면 두 행에 걸치는데,
+   *  잘린 쪽 모서리를 각지게 해서 "이어진 하나"로 읽히게 한다. */
   const windowInDay = (dayStart: number) => {
     const s = Math.max(winStart, dayStart)
     const e = Math.min(winEnd, dayStart + DAY_MS)
     if (e <= s) return null
-    return { left: (s - dayStart) / DAY_MS, width: (e - s) / DAY_MS }
+    return {
+      left: (s - dayStart) / DAY_MS,
+      width: (e - s) / DAY_MS,
+      openLeft: winStart < dayStart,
+      openRight: winEnd > dayStart + DAY_MS,
+    }
   }
 
   /* ── 미니맵 드래그 ── */
@@ -239,27 +245,33 @@ export default function DeviceTrend({ mac }: { mac: string }) {
                               ? `${day.label} ${cell.hour}시 · 아직 오지 않음`
                               : `${day.label} ${cell.hour}시 · 과열 ${cell.overheatCount}회 · 수신 ${cell.sampleCount}건`
                           }
-                          className={`h-6 rounded-[3px] transition-all ${
+                          className={`h-6 overflow-hidden rounded-[3px] transition-all ${
                             future ? 'bg-transparent' : heatCellClass(cell)
                           } ${
-                            focusStartMs === cell.startMs ? 'ring-2 ring-foreground/70 ring-offset-1' : ''
+                            focusStartMs === cell.startMs ? 'ring-2 ring-highlight/50 ring-offset-1' : ''
                           } ${future ? 'cursor-default' : 'cursor-pointer hover:opacity-80'}`}
-                        />
+                        >
+                          {/* 강조 셀 — 테두리는 연하게, 안쪽 wash는 진하게 */}
+                          {focusStartMs === cell.startMs && <span className="block h-full w-full bg-highlight/60" />}
+                        </button>
                       )
                     })}
                   </div>
-                  {/* 현재 밴드 창 — 셀 상단에 얹는다(셀 색은 안 건드림).
-                      하단의 '신호 수신'(파란 선 + 화살촉)과 헷갈리지 않게 색·형태를 모두 달리한다:
-                      중립 먹색 + 양 끝 세로 캡(⌐¬) */}
+                  {/* 현재 밴드 창 — 셀을 감싸는 형광펜 박스. 미니맵의 창 사각형과 같은 표현이라
+                      "같은 것"으로 읽힌다. 라임은 파랑(기기 신호)·빨강(과열) 어느 쪽과도 안 겹치고,
+                      옅은 wash만 깔아 형광펜처럼 보이면서 셀의 과열 농도 판독을 해치지 않는다.
+                      창이 자정을 넘어 잘린 쪽은 모서리를 각지게 하고 그쪽 테두리를 없애
+                      두 조각이 '이어진 하나'로 읽히게 한다. */}
                   {winBar && (
                     <div
-                      className="pointer-events-none absolute top-0 h-[7px]"
-                      style={{ left: pct(winBar.left), width: `max(4px, ${pct(winBar.width)})` }}
-                    >
-                      <div className="absolute inset-x-0 top-0 h-[2.5px] bg-foreground/75" />
-                      <div className="absolute left-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
-                      <div className="absolute right-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
-                    </div>
+                      className={`pointer-events-none absolute -inset-y-[3px] bg-highlight/25 ${
+                        winBar.openLeft ? 'rounded-l-none border-l-0' : 'rounded-l-[8px]'
+                      } ${winBar.openRight ? 'rounded-r-none border-r-0' : 'rounded-r-[8px]'}`}
+                      style={{
+                        left: `calc(${pct(winBar.left)} - 2px)`,
+                        width: `calc(max(4px, ${pct(winBar.width)}) + 4px)`,
+                      }}
+                    />
                   )}
                   {/* Wi-Fi 신호 수신 구간 — 셀 위 absolute 오버레이 */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[8px]">
@@ -294,11 +306,7 @@ export default function DeviceTrend({ mac }: { mac: string }) {
             <span className="h-[2px] w-5 rounded-full bg-primary" />신호 수신
           </span>
           <span className="flex items-center gap-1">
-            <span className="relative inline-block h-[7px] w-5">
-              <span className="absolute inset-x-0 top-0 h-[2.5px] bg-foreground/75" />
-              <span className="absolute left-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
-              <span className="absolute right-0 top-0 h-[7px] w-[2px] bg-foreground/75" />
-            </span>
+            <span className="inline-block h-[11px] w-5 rounded-[4px] bg-highlight/40" />
             아래 밴드 구간
           </span>
         </div>
@@ -416,7 +424,7 @@ export default function DeviceTrend({ mac }: { mac: string }) {
             />
           ))}
           <div
-            className="pointer-events-none absolute inset-y-0 rounded-md border border-primary bg-primary/10"
+            className="pointer-events-none absolute inset-y-0 rounded-md border-2 border-highlight/70 bg-highlight/25"
             style={{ left: pct((winStart - model.rangeStartMs) / fullMs), width: pct(winMs / fullMs) }}
           />
         </div>

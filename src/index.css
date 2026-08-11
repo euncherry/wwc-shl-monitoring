@@ -23,6 +23,9 @@
   --color-point-1: #64FFDA;
   --color-point-2: #A7FFEB;
   --color-point-red: #E74C3C;
+  /* 형광펜 — '지금 보고 있는 구간' 표시 전용. 의미색(파랑=신호, 빨강=과열,
+     초록=정상, 앰버=경고)과 겹치지 않도록 라임을 따로 둔다. */
+  --color-highlight: #A3E635;
 
   /* ── Semantic UI Colors ── */
   --color-secondary: #f1f5f9;
