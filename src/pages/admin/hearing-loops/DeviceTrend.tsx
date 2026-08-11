@@ -111,21 +111,24 @@ export default function DeviceTrend({ mac }: { mac: string }) {
   const winSpans = useMemo(() => clipToWindow(model.spans, winStart, winEnd), [model.spans, winStart, winEnd])
   const winRssi = useMemo(() => model.rssi.filter((p) => p.ms >= winStart && p.ms <= winEnd), [model.rssi, winStart, winEnd])
 
-  // RSSI polyline — 결측(null)에서 선을 끊는다. 보간 금지.
+  // RSSI polyline — 보간 금지. 두 곳에서 선을 끊는다:
+  //  ① 결측(null = 원본이 null이거나 0)
+  //  ② 수신 간격이 LINK_GAP_MS를 넘는 공백 — 히트맵 화살표와 같은 임계라 두 뷰가 같은 얘기를 한다.
+  //     (안 끊으면 심야 4~6시간 무보고 구간이 직선으로 이어져 신호가 계속 온 것처럼 보인다)
   const rssiPaths = useMemo(() => {
     const segs: string[] = []
     let cur: string[] = []
+    let prevMs: number | null = null
+    const flush = () => { if (cur.length > 1) segs.push(cur.join(' ')); cur = [] }
     for (const p of winRssi) {
-      if (p.dbm === null) {
-        if (cur.length > 1) segs.push(cur.join(' '))
-        cur = []
-        continue
-      }
+      if (p.dbm === null) { flush(); prevMs = null; continue }
+      if (prevMs !== null && p.ms - prevMs > LINK_GAP_MS) flush()
       const x = ((p.ms - winStart) / winMs) * 1000
       const y = ((RSSI_MAX - clamp(p.dbm, RSSI_MIN, RSSI_MAX)) / (RSSI_MAX - RSSI_MIN)) * 100
       cur.push(`${x.toFixed(2)},${y.toFixed(2)}`)
+      prevMs = p.ms
     }
-    if (cur.length > 1) segs.push(cur.join(' '))
+    flush()
     return segs
   }, [winRssi, winStart, winMs])
 
