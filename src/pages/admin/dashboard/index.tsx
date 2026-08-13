@@ -142,6 +142,11 @@ export default function AdminDashboard() {
     return stackDots(withRssi, (d) => d.wifiRssi ?? 0)
   }, [devices])
   const unplotted = wifi.connected - plotted.length
+  /** 표 뷰용 — 연결된 전체를 약한 순으로 */
+  const sortedByRssi = useMemo(
+    () => devices.filter((d) => d.connectionStatus !== 'OFFLINE').sort((a, b) => (a.wifiRssi ?? 0) - (b.wifiRssi ?? 0)),
+    [devices],
+  )
 
   const openByMac = (mac: string) => {
     const d = devices.find((x) => x.mac === mac)
@@ -232,11 +237,17 @@ export default function AdminDashboard() {
                         onClick={() => setSelectedDevice(item)}
                         title={`${item.alias || item.mac} · ${item.wifiRssi}dBm`}
                         aria-label={`${item.alias || item.mac} ${item.wifiRssi}dBm`}
-                        className={`absolute -ml-[4.5px] h-[9px] w-[9px] rounded-full transition-transform hover:scale-150 ${
-                          item.wifiSignal === 'WEAK' ? 'bg-warning' : item.wifiSignal === 'FAIR' ? 'bg-primary' : 'bg-success'
-                        }`}
+                        /* 히트 영역은 24px(투명), 실제 마크는 9px — 9px 점은 정확히 못 누른다 */
+                        className="group absolute -ml-3 -mb-3 flex h-6 w-6 items-center justify-center"
                         style={{ left: `${wifiAxisPos(item.wifiRssi ?? 0) * 100}%`, bottom: `${6 + level * 9}px` }}
-                      />
+                      >
+                        {/* ring-page = 표면색 2px 링. 겹친 점끼리 서로를 먹지 않게 한다 */}
+                        <span
+                          className={`h-[9px] w-[9px] rounded-full ring-2 ring-page transition-transform group-hover:scale-150 ${
+                            item.wifiSignal === 'WEAK' ? 'bg-warning' : item.wifiSignal === 'FAIR' ? 'bg-primary' : 'bg-success'
+                          }`}
+                        />
+                      </button>
                     ))}
                   </div>
                   <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
@@ -252,28 +263,32 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* 약한 순 목록 — 많으면 스크롤 */}
-                {wifi.weakDevices.length > 0 ? (
-                  <div className="mt-3 max-h-[132px] overflow-y-auto border-t border-border scrollbar-thin">
-                    {wifi.weakDevices.map((d) => (
+                {/* 표 뷰 — 전체를 약한 순으로. 스트립의 초록·주황이 3:1 미만이라 값을 텍스트로도 읽을 수 있어야 한다 */}
+                <div className="mt-3 border-t border-border">
+                  <div className="flex items-center justify-between px-5 py-2">
+                    <span className="text-[11px] text-muted-foreground">약한 순 · 전체 {wifi.connected}대</span>
+                    {wifi.weak > 0 && <span className="text-[11px] text-muted-foreground">위 {wifi.weak}대가 약함</span>}
+                  </div>
+                  <div className="max-h-[128px] overflow-y-auto scrollbar-thin">
+                    {sortedByRssi.map((d) => (
                       <button
                         key={d.mac}
                         onClick={() => setSelectedDevice(d)}
-                        className="flex w-full items-center gap-2.5 px-5 py-2 text-left transition-colors hover:bg-page"
+                        className="flex w-full items-center gap-2.5 px-5 py-1.5 text-left transition-colors hover:bg-page"
                       >
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            d.wifiSignal === 'WEAK' ? 'bg-warning' : d.wifiSignal === 'FAIR' ? 'bg-primary' : 'bg-success'
+                          }`}
+                        />
                         <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{d.alias || d.mac}</span>
-                        <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-border/50">
-                          <span className="block h-full rounded-full bg-warning" style={{ width: `${wifiAxisPos(d.wifiRssi ?? WIFI_AXIS_MIN) * 100}%` }} />
-                        </span>
-                        <span className="w-[52px] shrink-0 text-right text-[11px] font-bold tabular-nums text-warning">
-                          {d.wifiRssi != null ? `${d.wifiRssi}dBm` : '—'}
+                        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                          {d.wifiRssi != null ? `${d.wifiRssi} dBm` : '—'}
                         </span>
                       </button>
                     ))}
                   </div>
-                ) : (
-                  <p className="mt-3 border-t border-border px-5 py-3 text-[12px] text-success">신호가 약한 기기가 없습니다.</p>
-                )}
+                </div>
               </>
             )}
           </CardShell>
@@ -303,6 +318,8 @@ export default function AdminDashboard() {
                   {zoneRows.map((z) => {
                     const pct = z.uptimePct
                     const bar = pct === null ? 'bg-border' : pct === 100 ? 'bg-success' : pct >= 80 ? 'bg-primary' : pct >= 60 ? 'bg-warning' : 'bg-destructive'
+                    // 미충전 트랙은 채움과 같은 램프의 연한 단계 — 회색 트랙은 상태가 바 전체에서 안 읽힌다
+                    const track = pct === null ? 'bg-border/40' : pct === 100 ? 'bg-success/15' : pct >= 80 ? 'bg-primary/15' : pct >= 60 ? 'bg-warning/15' : 'bg-destructive/15'
                     const pctText = pct === null ? 'text-muted-foreground' : pct === 100 ? 'text-success' : pct >= 80 ? 'text-primary' : pct >= 60 ? 'text-warning' : 'text-destructive'
                     return (
                       <tr
@@ -324,7 +341,7 @@ export default function AdminDashboard() {
                             <span className="text-[12px] text-muted-foreground">—</span>
                           ) : (
                             <div className="flex items-center gap-2.5">
-                              <div className="flex-1 h-2 rounded-full bg-border/50 overflow-hidden">
+                              <div className={`h-2 flex-1 overflow-hidden rounded-full ${track}`}>
                                 <div className={`h-full rounded-full ${bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
                               </div>
                               <span className={`text-[11px] font-bold tabular-nums ${pctText}`}>{pct}%</span>
@@ -373,7 +390,7 @@ export default function AdminDashboard() {
             <div className="px-5 py-5">
               {/* 현재 — 가장 큰 층위 */}
               <div className="flex items-baseline gap-2.5">
-                <span className={`text-[40px] font-bold leading-none tabular-nums ${hotNow ? 'text-destructive' : 'text-muted-foreground/70'}`}>
+                <span className={`text-[40px] font-bold leading-none ${hotNow ? 'text-destructive' : 'text-muted-foreground/70'}`}>
                   {hotNow}
                 </span>
                 <span className={`text-[13px] ${hotNow ? 'text-destructive' : 'text-muted-foreground'}`}>대 과열 중</span>
@@ -386,14 +403,14 @@ export default function AdminDashboard() {
               <div className="mt-4 flex gap-3 border-t border-border pt-4">
                 <div className="flex-1">
                   <p className="text-[11px] text-muted-foreground">최근 24시간</p>
-                  <p className="mt-1 text-[17px] font-bold leading-none tabular-nums text-foreground">
+                  <p className="mt-1 text-[17px] font-bold leading-none text-foreground">
                     {overheatQ.isLoading ? '—' : overheat.recent.length}
                     <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">대</span>
                   </p>
                 </div>
                 <div className="flex-1 border-l border-border pl-3">
                   <p className="text-[11px] text-muted-foreground">최근 7일</p>
-                  <p className={`mt-1 text-[17px] font-bold leading-none tabular-nums ${overheat.window.length ? 'text-warning' : 'text-foreground'}`}>
+                  <p className={`mt-1 text-[17px] font-bold leading-none ${overheat.window.length ? 'text-warning' : 'text-foreground'}`}>
                     {overheatQ.isLoading ? '—' : overheat.window.length}
                     <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">대</span>
                   </p>
@@ -454,7 +471,7 @@ export default function AdminDashboard() {
           >
             <div className="px-5 py-5">
               <div className="flex items-baseline gap-2.5">
-                <span className={`text-[32px] font-bold leading-none tabular-nums ${alertStats?.pending ? 'text-destructive' : 'text-muted-foreground/70'}`}>
+                <span className={`text-[32px] font-bold leading-none ${alertStats?.pending ? 'text-destructive' : 'text-muted-foreground/70'}`}>
                   {alertStats?.pending ?? 0}
                 </span>
                 <span className="text-[13px] text-muted-foreground">건 미처리</span>
@@ -508,17 +525,17 @@ export default function AdminDashboard() {
                 <>
                   <div className="flex items-stretch gap-1.5 text-center">
                     <div className="flex-1 rounded-xl bg-warning/10 px-2 py-3">
-                      <p className="text-[19px] font-bold leading-none tabular-nums text-warning">{pipeline.provisioning}</p>
+                      <p className="text-[19px] font-bold leading-none text-warning">{pipeline.provisioning}</p>
                       <p className="mt-1.5 text-[11px] leading-tight text-warning/80">프로비저닝<br />대기</p>
                     </div>
                     <div className="flex items-center"><ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" /></div>
                     <div className="flex-1 rounded-xl bg-primary/10 px-2 py-3">
-                      <p className="text-[19px] font-bold leading-none tabular-nums text-primary">{pipeline.awaitingZone}</p>
+                      <p className="text-[19px] font-bold leading-none text-primary">{pipeline.awaitingZone}</p>
                       <p className="mt-1.5 text-[11px] leading-tight text-primary/80">존 배정<br />대기</p>
                     </div>
                     <div className="flex items-center"><ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" /></div>
                     <div className="flex-1 rounded-xl bg-page px-2 py-3">
-                      <p className="text-[19px] font-bold leading-none tabular-nums text-foreground">{pipeline.operating}</p>
+                      <p className="text-[19px] font-bold leading-none text-foreground">{pipeline.operating}</p>
                       <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground">운영 중</p>
                     </div>
                   </div>
