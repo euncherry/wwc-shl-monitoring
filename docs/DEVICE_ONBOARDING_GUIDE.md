@@ -334,11 +334,10 @@ ESP32 펌웨어가 3.1.0 미만이면 나타나지 않습니다. 설정 페이�
 
 ## 문의
 
-
-
-| **이름** | **이채은** |
+| 항목 | 내용 |
 | --- | --- |
-| **소속** | **WhatWeCare** |
-| **연락처** | **olchaeun@berhmkorea.com** |
+| 이름 | 이채은 |
+| 소속 | WhatWeCare |
+| 연락처 | <olchaeun@berhmkorea.com> |
 
 
