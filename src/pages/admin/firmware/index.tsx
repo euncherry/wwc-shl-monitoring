@@ -393,7 +393,12 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
               <h3 className="text-lg font-bold text-foreground">펌웨어 업데이트 전송</h3>
               <p className="text-[12px] text-muted-foreground">
                 <span className="font-mono font-semibold text-primary">v{firmware.version}</span>
-                {inProgress ? ' 업데이트 진행 중' : ' — 기기를 선택하세요 (HL·WiFi 동시 발송)'}
+                {/* done일 때도 '진행 중'으로 남으면 하단의 '완료'와 어긋난다.
+                    실패가 섞였는데 '완료'라고 하면 그것도 거짓이라 결과까지 갈라 쓴다.
+                    건수는 하단이 이미 보여주므로 여기선 반복하지 않는다. */}
+                {done
+                  ? failCount > 0 ? ' 업데이트 종료' : ' 업데이트 완료'
+                  : sending ? ' 업데이트 진행 중' : ' — 기기를 선택하세요 (HL·WiFi 동시 발송)'}
               </p>
             </div>
           </div>
