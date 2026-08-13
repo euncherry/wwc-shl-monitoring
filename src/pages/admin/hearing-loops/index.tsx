@@ -694,8 +694,10 @@ export function DeviceDetailModal({
   /** 표시용 — 새로고침하면 GET /devices/:mac 최신값으로 교체(모달 안 닫힘) */
   const device = freshDevice ?? deviceProp
 
-  const handleRefresh = async () => {
-    setSpin((s) => s + 1) // 클릭 시 1회전
+  /** 이 모달만 다시 읽는다(무효화 없음).
+   *  모달은 부모가 넘긴 스냅샷(deviceProp)을 그리므로 쿼리 무효화만으로는 갱신되지 않는다.
+   *  OTA로 펌웨어가 바뀌면 '설치된 세트'가 달라지니 직접 다시 읽어야 한다. */
+  const refetchDevice = async () => {
     setRefreshing(true)
     try {
       const dto = await devicesApi.get(deviceProp.mac)
@@ -705,6 +707,11 @@ export function DeviceDetailModal({
     } finally {
       setRefreshing(false)
     }
+  }
+
+  const handleRefresh = async () => {
+    setSpin((s) => s + 1) // 클릭 시 1회전
+    await refetchDevice()
     // 리스트 카드 + 이력 탭 동기화 (백그라운드 refetch)
     qc.invalidateQueries({ queryKey: deviceKeys.all })
     qc.invalidateQueries({ queryKey: alertKeys.all })
@@ -1106,7 +1113,10 @@ export function DeviceDetailModal({
                   <span className="flex items-center gap-2 text-[12px] text-primary"><Package className="h-4 w-4 shrink-0" />설치된 세트</span>
                   <span className="text-right">
                     <span className="font-mono text-[13px] font-bold text-primary">v{device.installedFirmware.version}</span>
-                    <span className="ml-2 text-[11px] text-muted-foreground">{formatDateTime(device.installedFirmware.uploaded_at)} 설치</span>
+                    {/* uploaded_at은 펌웨어를 '업로드'한 시각이지 이 기기가 설치한 시각이 아니다.
+                        '설치'라고 쓰면 오늘 올린 기기도 업로드 날짜에 설치한 것처럼 읽힌다.
+                        실제 설치 시각은 세션의 completed_at이며, 기기 이력 > 업데이트 탭에 있다. */}
+                    <span className="ml-2 text-[11px] text-muted-foreground">{formatDateTime(device.installedFirmware.uploaded_at)} 배포</span>
                   </span>
                 </div>
               ) : (
@@ -1273,7 +1283,18 @@ export function DeviceDetailModal({
           </button>
         </div>
       </div>
-      {showOta && <OtaUpdateModal macs={[device.mac]} onClose={() => setShowOta(false)} />}
+      {/* OTA를 닫으면 곧바로 다시 읽는다 — 방금 올린 펌웨어가 '설치된 세트'에 바로 보이도록.
+          목록·이력 쿼리 무효화는 OtaUpdateModal이 이미 했으므로 여기선 이 모달만 다시 읽는다
+          (handleRefresh를 쓰면 같은 무효화가 한 번 더 돌아 요청이 두 배가 된다). */}
+      {showOta && (
+        <OtaUpdateModal
+          macs={[device.mac]}
+          onClose={() => {
+            setShowOta(false)
+            void refetchDevice()
+          }}
+        />
+      )}
     </div>
   )
 }

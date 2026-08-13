@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { X, Send, Package, Wifi, Cpu, Radio, Check, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react'
 import { useLockBodyScroll } from '@/hooks/useLockBodyScroll'
-import { useFirmwares } from '@/hooks/useFirmware'
-import { useDevices } from '@/hooks/useDevices'
+import { useFirmwares, firmwareKeys } from '@/hooks/useFirmware'
+import { useDevices, deviceKeys } from '@/hooks/useDevices'
 import { firmwareApi } from '@/api/firmware'
 import {
   applyProgressEvent,
@@ -67,6 +68,7 @@ export function OtaUpdateModal({
   onClose: () => void
 }) {
   useLockBodyScroll()
+  const qc = useQueryClient()
   const { data: firmwares, isLoading: fwLoading } = useFirmwares()
   const { data: devices } = useDevices()
 
@@ -176,6 +178,17 @@ export function OtaUpdateModal({
   const failCount = progList.filter((p) => p.phase === 'failed').length
   const inProgress = sending || done
 
+  /** 닫기 — 전송을 했다면 기기·펌웨어 쿼리를 버린다.
+   *  펌웨어가 바뀌면 목록 카드의 버전·설치 세트와 이력 탭의 세션이 전부 낡는다.
+   *  아무것도 안 보내고 취소했으면 버릴 이유가 없다. */
+  const close = () => {
+    if (progList.length > 0) {
+      qc.invalidateQueries({ queryKey: deviceKeys.all })
+      qc.invalidateQueries({ queryKey: firmwareKeys.all })
+    }
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={(e) => e.stopPropagation()}>
       <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl">
@@ -197,7 +210,7 @@ export function OtaUpdateModal({
             </div>
           </div>
           {!sending && (
-            <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors">
+            <button onClick={close} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors">
               <X className="h-5 w-5" />
             </button>
           )}
@@ -330,10 +343,10 @@ export function OtaUpdateModal({
         {/* Footer */}
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-page/30 px-6 py-4">
           {done ? (
-            <button onClick={onClose} className="rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors">닫기</button>
+            <button onClick={close} className="rounded-xl bg-primary-dark px-5 py-2.5 text-[13px] font-bold text-white hover:bg-primary-dark/90 transition-colors">닫기</button>
           ) : (
             <>
-              <button onClick={onClose} disabled={sending} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">취소</button>
+              <button onClick={close} disabled={sending} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors disabled:opacity-50">취소</button>
               <button
                 onClick={send}
                 disabled={sending || !firmware || onlineTargets.length === 0}

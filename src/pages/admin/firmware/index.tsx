@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   Search,
@@ -19,7 +20,7 @@ import type { Firmware as FirmwareVM } from '@/types/firmware'
 import type { HearingLoop } from '@/types/device'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
-import { useFirmwares, useUploadFirmware } from '@/hooks/useFirmware'
+import { useFirmwares, useUploadFirmware, firmwareKeys } from '@/hooks/useFirmware'
 import { firmwareApi } from '@/api/firmware'
 import {
   applyProgressEvent,
@@ -30,7 +31,7 @@ import {
   type McuState,
   type ProgressPhase,
 } from '@/lib/otaProgress'
-import { useDevices } from '@/hooks/useDevices'
+import { useDevices, deviceKeys } from '@/hooks/useDevices'
 
 /* ══════════════════════════════════════════════════════
    유틸 / Sub-components
@@ -205,6 +206,7 @@ function ProgressBar({ label, mcu }: { label: string; mcu: McuState | null }) {
 }
 
 function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () => void }) {
+  const qc = useQueryClient()
   useLockBodyScroll()
   const { data: devices, isLoading } = useDevices()
   const [search, setSearch] = useState('')
@@ -379,6 +381,16 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
 
   const inProgress = sending || done
 
+  /** 닫기 — 전송을 했다면 기기·펌웨어 쿼리를 버린다.
+   *  펌웨어가 바뀌면 기기 목록의 버전·설치 세트와 이력 탭 세션이 낡는다. */
+  const close = () => {
+    if (progList.length > 0) {
+      qc.invalidateQueries({ queryKey: deviceKeys.all })
+      qc.invalidateQueries({ queryKey: firmwareKeys.all })
+    }
+    onClose()
+  }
+
   // 오버레이에 onClick={onClose} 미지정 — 외부 클릭으로 닫히지 않음(전송 중 실수 방지). 닫기는 X·취소 버튼으로만
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -402,7 +414,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors">
+          <button onClick={close} className="rounded-lg p-2 text-muted-foreground hover:bg-page hover:text-foreground transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -600,7 +612,7 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
             )}
           </span>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">
+            <button onClick={close} className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-page transition-colors">
               {done ? '닫기' : '취소'}
             </button>
             {!done && !sending && (
