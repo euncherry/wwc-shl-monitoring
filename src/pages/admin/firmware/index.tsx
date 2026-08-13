@@ -21,6 +21,15 @@ import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
 import { useFirmwares, useUploadFirmware } from '@/hooks/useFirmware'
 import { firmwareApi } from '@/api/firmware'
+import {
+  applyProgressEvent,
+  applyStreamClose,
+  phaseFromSessionStatus,
+  UNSETTLED_MESSAGE,
+  type DeviceProgress as BaseDeviceProgress,
+  type McuState,
+  type ProgressPhase,
+} from '@/lib/otaProgress'
 import { useDevices } from '@/hooks/useDevices'
 
 /* ══════════════════════════════════════════════════════
@@ -163,18 +172,8 @@ function UploadModal({ onClose }: { onClose: () => void }) {
    Send Modal — 기기 선택 → SSE 구독 선행 → POST 트리거 → 실시간 진행 바
    ══════════════════════════════════════════════════════ */
 
-type ProgressPhase = 'waiting' | 'connecting' | 'in_progress' | 'complete' | 'failed'
-
-interface McuState {
-  progress: number
-  status: string
-}
-
-interface DeviceProgress {
-  phase: ProgressPhase
-  self: McuState | null
-  target: McuState | null
-  errorMessage: string | null
+// 판정 규칙·기본 타입은 lib/otaProgress 한 곳에서만 정의한다 (히어링루프 관리 모달과 공유)
+interface DeviceProgress extends BaseDeviceProgress {
   sessionId: number | null
   firmwareId: number | null
 }
@@ -308,29 +307,40 @@ function SendModal({ firmware, onClose }: { firmware: FirmwareVM; onClose: () =>
               mac,
               (event) => {
                 setProgress((prev) => {
-                  const curr = prev[mac] ?? { phase: 'in_progress', self: null, target: null, errorMessage: null, sessionId: null, firmwareId: null }
-                  const mcuState: McuState = { progress: event.progress_percent, status: event.status }
-                  const phase: ProgressPhase = event.status === 'failed' ? 'failed' : 'in_progress'
-                  const errorMessage = event.status === 'failed' ? (event.message ?? '업데이트 실패') : curr.errorMessage
-                  return {
-                    ...prev,
-                    [mac]: { ...curr, phase, [event.type]: mcuState, errorMessage },
-                  }
+                  const curr = prev[mac] ?? { phase: 'in_progress' as ProgressPhase, self: null, target: null, errorMessage: null, sessionId: null, firmwareId: null }
+                  return { ...prev, [mac]: applyProgressEvent(curr, event) }
                 })
               },
               () => {
-                // 스트림 종료 처리
-                // connecting 상태 = SSE 이벤트를 한 번도 못 받고 끊김 → 연결 실패
+                let unsettled = false
                 setProgress((prev) => {
                   const curr = prev[mac]
                   if (!curr) return prev
-                  if (curr.phase === 'connecting') {
-                    return { ...prev, [mac]: { ...curr, phase: 'failed', errorMessage: 'SSE 연결 실패' } }
-                  }
-                  const finalPhase: ProgressPhase = curr.phase === 'failed' ? 'failed' : 'complete'
-                  return { ...prev, [mac]: { ...curr, phase: finalPhase } }
+                  const next = applyStreamClose(curr)
+                  // 최종 판정 없이 끊겼다 — 완료로 위장하지 말고 서버에 물어본다
+                  unsettled = next.phase === 'in_progress'
+                  return { ...prev, [mac]: next }
                 })
-                settle()
+                if (!unsettled) { settle(); return }
+                firmwareApi
+                  .getSessions(mac, 1, 1)
+                  .then((res) => {
+                    const status = res.data?.[0]?.status
+                    setProgress((prev) => {
+                      const curr = prev[mac]
+                      if (!curr || curr.phase !== 'in_progress') return prev
+                      const phase = phaseFromSessionStatus(status)
+                      return { ...prev, [mac]: { ...curr, phase, errorMessage: phase === 'failed' ? (curr.errorMessage ?? UNSETTLED_MESSAGE) : curr.errorMessage } }
+                    })
+                  })
+                  .catch(() => {
+                    setProgress((prev) => {
+                      const curr = prev[mac]
+                      if (!curr || curr.phase !== 'in_progress') return prev
+                      return { ...prev, [mac]: { ...curr, phase: 'failed', errorMessage: UNSETTLED_MESSAGE } }
+                    })
+                  })
+                  .finally(settle)
               },
             )
 

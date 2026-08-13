@@ -57,7 +57,8 @@ export interface SendFirmwareResponse {
 /** SSE GET /firmware/:mac/update-progress 이벤트 data */
 export interface FirmwareUpdateProgress {
   mac: string
-  type: 'self' | 'target'
+  /** ⚠️ 'session'은 MCU가 아니라 세션 전체 이벤트(타임아웃·버전동일 자동완료). 백엔드 UpdateProgressEvent와 동일 */
+  type: 'self' | 'target' | 'session'
   progress_percent: number
   status: 'downloading' | 'verifying' | 'flashing' | 'complete' | 'failed'
   message: string | null
