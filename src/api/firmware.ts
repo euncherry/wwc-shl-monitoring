@@ -87,7 +87,10 @@ export const firmwareApi = {
               try {
                 const json = JSON.parse(dataLine.slice(5).trim()) as FirmwareUpdateProgress
                 onEvent(json)
-                if (json.is_final) { reader.cancel(); return }
+                // ⚠️ 종료 이벤트를 받고 그냥 return하면 아래 onClose()를 건너뛴다.
+                //    호출부(OtaUpdateModal)는 완료 판정과 Promise resolve를 둘 다 onClose에 걸어놨기 때문에,
+                //    그러면 모달이 '진행 중'·'전송 중…'에 영원히 멈춘다. 반드시 여기서 닫아준다.
+                if (json.is_final) { reader.cancel(); onClose(); return }
               } catch { /* JSON 파싱 실패 무시 */ }
             }
           }
