@@ -294,3 +294,28 @@ export function summarizeFirmware(devices: HearingLoop[]): FirmwareSummary {
   })
   return { latest, outdated: outdatedDevices.length, unknown, outdatedDevices }
 }
+
+/* ── Wi-Fi 분포 스트립 축 ───────────────────────────── */
+
+/** 분포 스트립 x축 고정 범위. 데이터에 맞춰 늘리면 점 위치가 매번 달라져 비교가 안 된다. */
+export const WIFI_AXIS_MIN = -85
+export const WIFI_AXIS_MAX = -30
+/** 백엔드 WifiSignalStatus 경계와 동일 */
+export const WIFI_THRESHOLDS = [-67, -55]
+
+/** RSSI → 스트립 내 x 위치(0~1). 축 밖은 잘라낸다. */
+export function wifiAxisPos(rssi: number): number {
+  const t = (rssi - WIFI_AXIS_MIN) / (WIFI_AXIS_MAX - WIFI_AXIS_MIN)
+  return Math.min(1, Math.max(0, t))
+}
+
+/** 같은 RSSI 값이 겹치면 위로 쌓기 위한 층 번호 */
+export function stackDots<T>(items: T[], valueOf: (x: T) => number): { item: T; level: number }[] {
+  const seen = new Map<number, number>()
+  return items.map((item) => {
+    const v = valueOf(item)
+    const level = seen.get(v) ?? 0
+    seen.set(v, level + 1)
+    return { item, level }
+  })
+}

@@ -29,6 +29,11 @@ import {
   summarizeDevices,
   summarizeFirmware,
   summarizeWifi,
+  wifiAxisPos,
+  stackDots,
+  WIFI_AXIS_MIN,
+  WIFI_AXIS_MAX,
+  WIFI_THRESHOLDS,
   type OverheatDevice,
 } from '@/lib/dashboard'
 import { formatDateTime } from '@/lib/format'
@@ -129,6 +134,15 @@ export default function AdminDashboard() {
     [zones, devices, overheat, nowMs],
   )
 
+  /** 분포 스트립에 찍을 점 — RSSI가 있는 기기만. 같은 값은 위로 쌓는다 */
+  const plotted = useMemo(() => {
+    const withRssi = devices
+      .filter((d) => d.connectionStatus !== 'OFFLINE' && d.wifiRssi != null)
+      .sort((a, b) => (a.wifiRssi ?? 0) - (b.wifiRssi ?? 0))
+    return stackDots(withRssi, (d) => d.wifiRssi ?? 0)
+  }, [devices])
+  const unplotted = wifi.connected - plotted.length
+
   const openByMac = (mac: string) => {
     const d = devices.find((x) => x.mac === mac)
     if (d) setSelectedDevice(d)
@@ -193,53 +207,75 @@ export default function AdminDashboard() {
             <DeviceMap devices={devices} onSelect={setSelectedDevice} heightClass="h-[400px]" />
           </div>
 
-          {/* ⑤ Wi-Fi 신호 */}
+          {/* ⑤ Wi-Fi 신호 — 위: RSSI 분포 스트립 / 아래: 약한 순 목록(스크롤) */}
           <CardShell
             icon={<Wifi className="h-4 w-4" />}
+            iconCls={wifi.weak ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}
             title="Wi-Fi 신호"
-            action={<span className="text-[11px] text-muted-foreground">연결된 {wifi.connected}대 기준</span>}
+            action={<span className="shrink-0 text-[11px] text-muted-foreground">연결된 {wifi.connected}대 기준</span>}
           >
-            <div className="px-5 py-4">
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className={`text-[26px] font-bold leading-none tabular-nums ${wifi.weak ? 'text-warning' : 'text-muted-foreground'}`}>
-                  {wifi.weak}
-                </span>
-                <span className="text-[13px] text-muted-foreground">대 신호 약함</span>
-              </div>
-              {wifi.connected > 0 ? (
-                <>
-                  <div className="flex h-2.5 overflow-hidden rounded-full bg-border/40">
-                    <div className="bg-success" style={{ width: `${(wifi.strong / wifi.connected) * 100}%` }} />
-                    <div className="bg-primary" style={{ width: `${(wifi.fair / wifi.connected) * 100}%` }} />
-                    <div className="bg-warning" style={{ width: `${(wifi.weak / wifi.connected) * 100}%` }} />
+            {wifi.connected === 0 ? (
+              <p className="px-5 py-6 text-[12px] text-muted-foreground">연결된 기기가 없습니다.</p>
+            ) : (
+              <>
+                {/* 분포 스트립 — 기기 하나 = 점 하나. 버킷으로 뭉개지 않아 임계 근처 밀집·이상치가 보인다 */}
+                <div className="px-5 pt-4">
+                  <div className="relative h-[62px] rounded-xl bg-page">
+                    {WIFI_THRESHOLDS.map((v) => (
+                      <span key={v} className="absolute inset-y-0 w-px bg-border-strong/70" style={{ left: `${wifiAxisPos(v) * 100}%` }}>
+                        <span className="absolute left-1 top-1 whitespace-nowrap text-[10px] text-muted-foreground">{v}</span>
+                      </span>
+                    ))}
+                    {plotted.map(({ item, level }) => (
+                      <button
+                        key={item.mac}
+                        onClick={() => setSelectedDevice(item)}
+                        title={`${item.alias || item.mac} · ${item.wifiRssi}dBm`}
+                        aria-label={`${item.alias || item.mac} ${item.wifiRssi}dBm`}
+                        className={`absolute -ml-[4.5px] h-[9px] w-[9px] rounded-full transition-transform hover:scale-150 ${
+                          item.wifiSignal === 'WEAK' ? 'bg-warning' : item.wifiSignal === 'FAIR' ? 'bg-primary' : 'bg-success'
+                        }`}
+                        style={{ left: `${wifiAxisPos(item.wifiRssi ?? 0) * 100}%`, bottom: `${6 + level * 9}px` }}
+                      />
+                    ))}
                   </div>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />강함 <b className="font-bold text-foreground tabular-nums">{wifi.strong}</b></span>
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />보통 <b className="font-bold text-foreground tabular-nums">{wifi.fair}</b></span>
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warning" />약함 <b className="font-bold text-warning tabular-nums">{wifi.weak}</b></span>
+                  <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{WIFI_AXIS_MIN} dBm</span>
+                    <span>약할수록 왼쪽</span>
+                    <span>{WIFI_AXIS_MAX}</span>
                   </div>
-                  {wifi.weakDevices.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {wifi.weakDevices.slice(0, 6).map((d) => (
-                        <button
-                          key={d.mac}
-                          onClick={() => setSelectedDevice(d)}
-                          className="max-w-full truncate rounded-lg bg-warning/10 px-2.5 py-1 text-[11px] font-semibold text-warning transition-colors hover:bg-warning/20"
-                        >
-                          {d.alias || d.mac}
-                          {d.wifiRssi != null && <span className="ml-1 font-normal opacity-70">{d.wifiRssi}dBm</span>}
-                        </button>
-                      ))}
-                      {wifi.weakDevices.length > 6 && (
-                        <span className="px-1 py-1 text-[11px] text-muted-foreground">외 {wifi.weakDevices.length - 6}대</span>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-[12px] text-muted-foreground">연결된 기기가 없습니다.</p>
-              )}
-            </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />강함 <b className="font-bold tabular-nums text-foreground">{wifi.strong}</b></span>
+                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />보통 <b className="font-bold tabular-nums text-foreground">{wifi.fair}</b></span>
+                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warning" />약함 <b className="font-bold tabular-nums text-warning">{wifi.weak}</b></span>
+                    {unplotted > 0 && <span className="ml-auto">RSSI 미수신 {unplotted}대</span>}
+                  </div>
+                </div>
+
+                {/* 약한 순 목록 — 많으면 스크롤 */}
+                {wifi.weakDevices.length > 0 ? (
+                  <div className="mt-3 max-h-[132px] overflow-y-auto border-t border-border scrollbar-thin">
+                    {wifi.weakDevices.map((d) => (
+                      <button
+                        key={d.mac}
+                        onClick={() => setSelectedDevice(d)}
+                        className="flex w-full items-center gap-2.5 px-5 py-2 text-left transition-colors hover:bg-page"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{d.alias || d.mac}</span>
+                        <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-border/50">
+                          <span className="block h-full rounded-full bg-warning" style={{ width: `${wifiAxisPos(d.wifiRssi ?? WIFI_AXIS_MIN) * 100}%` }} />
+                        </span>
+                        <span className="w-[52px] shrink-0 text-right text-[11px] font-bold tabular-nums text-warning">
+                          {d.wifiRssi != null ? `${d.wifiRssi}dBm` : '—'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 border-t border-border px-5 py-3 text-[12px] text-success">신호가 약한 기기가 없습니다.</p>
+                )}
+              </>
+            )}
           </CardShell>
 
           {/* ② 텔레코일존별 요약 */}
