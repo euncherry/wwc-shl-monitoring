@@ -36,7 +36,9 @@ export function useDeviceStatusRange(
   const rangeStartMs = useMemo(() => kstDayStartMs(Date.now()) - (days - 1) * DAY_MS, [days])
 
   const q = useInfiniteQuery({
-    queryKey: [...deviceKeys.all, 'statusRange', mac ?? '', days] as const,
+    // ⚠️ days는 키에 넣지 않는다 — 넣으면 기간을 넓힐 때마다 새 쿼리가 돼서 1페이지부터 다시 받는다.
+    //    같은 키를 유지하면 cutoff가 뒤로 갈 때 필요한 페이지만 이어서 받는다.
+    queryKey: [...deviceKeys.all, 'statusRange', mac ?? ''] as const,
     initialPageParam: 1,
     queryFn: ({ pageParam }) => devicesApi.getStatusLogs(mac as string, pageParam, STATUS_PAGE_SIZE),
     getNextPageParam: (last, pages) => {

@@ -14,6 +14,8 @@ import { DAY_MS, HOUR_MS, kstDayKey, kstDayStartMs, kstShortDay, toMs } from './
 
 /** 히트맵이 보여주는 일수 */
 export const HEATMAP_DAYS = 7
+/** 뒤로 갈 수 있는 최대 칸 수. 상태이력 purge가 1개월이라 4주(28일)가 상한 */
+export const MAX_WEEK_OFFSET = 3
 
 /** 밴드 기본 창 — 과열 사이클이 3분 간격이라 하루면 막대가 뭉개진다 */
 export const BAND_WINDOW_MS = 6 * HOUR_MS
@@ -33,7 +35,8 @@ export const LINK_GAP_MS = 60 * 60 * 1000
 
 /** 상태이력 페이지 크기 / 페이지 순회 상한 (날짜 범위 필터가 API에 없어 최신순으로 받다가 끊는다) */
 export const STATUS_PAGE_SIZE = 1000
-export const MAX_STATUS_PAGES = 10
+/** 4주까지 뒤로 갈 수 있어야 해서 상향. 실측: 과열 폭주가 있던 기기가 9일치에 4페이지 */
+export const MAX_STATUS_PAGES = 15
 
 /* ── 자료구조 ────────────────────────────────────────────── */
 
@@ -118,14 +121,17 @@ export function buildTrendModel(
   logs: DeviceStatusLogDto[],
   nowMs: number,
   days = HEATMAP_DAYS,
+  /** 0=최근 N일, 1=그 전 N일 … 과거로 한 칸씩 */
+  weekOffset = 0,
 ): TrendModel {
-  const rangeStartMs = kstDayStartMs(nowMs) - (days - 1) * DAY_MS
-  const rangeEndMs = nowMs
+  const rangeStartMs = kstDayStartMs(nowMs) - (days - 1) * DAY_MS - weekOffset * days * DAY_MS
+  const rangeEndMs = weekOffset === 0 ? nowMs : rangeStartMs + days * DAY_MS - 1
 
   // 오름차순 정렬. reported_at 동률은 id로 안정화(서버 ORDER BY에 tie-breaker가 없다).
+  // 창 밖 로그는 여기서 잘라낸다 — 요약(과열 횟수·수신 건수)이 화면에 보이는 구간과 일치해야 한다.
   const sorted = logs
     .map((l) => ({ ...l, ms: toMs(l.reported_at) }))
-    .filter((l) => Number.isFinite(l.ms))
+    .filter((l) => Number.isFinite(l.ms) && l.ms >= rangeStartMs && l.ms <= rangeEndMs)
     .sort((a, b) => (a.ms - b.ms) || (a.id - b.id))
 
   // 히트맵 행/셀 뼈대 (데이터가 없는 날도 행은 만든다)

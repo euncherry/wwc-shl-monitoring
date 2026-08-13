@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
-import { Loader2, AlertTriangle, Info } from 'lucide-react'
+import { Loader2, AlertTriangle, Info, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDeviceStatusRange } from '@/hooks/useDeviceStatusRange'
 import {
   BAND_WINDOWS,
   BAND_WINDOW_MS,
   HEATMAP_DAYS,
+  MAX_WEEK_OFFSET,
   HEAT_LEGEND,
   LINK_GAP_MS,
   RSSI_MAX,
@@ -54,11 +55,19 @@ function SelectedBand({ at }: { at: { left: number; width: number } | null }) {
    Main
    ══════════════════════════════════════════════════════ */
 export default function DeviceTrend({ mac }: { mac: string }) {
-  const { logs, isLoading, isError, isFetchingMore, truncated } = useDeviceStatusRange(mac, HEATMAP_DAYS)
+  /** 0=최근 7일, 1=그 전 7일 … 뒤로 갈수록 필요한 페이지를 이어서 더 받는다 */
+  const [weekOffset, setWeekOffset] = useState(0)
+  const { logs, isLoading, isError, isFetchingMore, truncated } = useDeviceStatusRange(
+    mac,
+    HEATMAP_DAYS * (weekOffset + 1),
+  )
 
   // 렌더마다 흔들리지 않도록 마운트 시점으로 고정
   const nowMs = useMemo(() => Date.now(), [])
-  const model = useMemo(() => buildTrendModel(logs, nowMs, HEATMAP_DAYS), [logs, nowMs])
+  const model = useMemo(
+    () => buildTrendModel(logs, nowMs, HEATMAP_DAYS, weekOffset),
+    [logs, nowMs, weekOffset],
+  )
 
   const [winMs, setWinMs] = useState<number>(BAND_WINDOW_MS)
   const [winStartMs, setWinStartMs] = useState<number | null>(null)
@@ -85,6 +94,15 @@ export default function DeviceTrend({ mac }: { mac: string }) {
     const center = winStart + winMs / 2
     setWinMs(ms)
     setWinStartMs(clamp(center - ms / 2, model.rangeStartMs, Math.max(model.rangeStartMs, model.rangeEndMs - ms)))
+  }
+
+  const goWeek = (delta: number) => {
+    const next = clamp(weekOffset + delta, 0, MAX_WEEK_OFFSET)
+    if (next === weekOffset) return
+    setWeekOffset(next)
+    // 이전 구간의 창·강조 좌표를 그대로 들고 가면 범위 밖이라 기본 위치로 되돌린다
+    setWinStartMs(null)
+    setFocusStartMs(null)
   }
 
   const jumpTo = (cell: HeatCell) => {
@@ -196,13 +214,48 @@ export default function DeviceTrend({ mac }: { mac: string }) {
 
   return (
     <div className="space-y-4">
-      {/* 요약 */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-        <span>최근 {HEATMAP_DAYS}일 · 과열 <b className="text-destructive">{model.totalOverheats}</b>회</span>
-        <span>수신 {model.sampleCount.toLocaleString()}건</span>
-        {isFetchingMore && <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />더 받는 중…</span>}
-        {truncated && <span className="text-warning">조회 상한에 걸려 일부 구간이 빠졌습니다</span>}
+      {/* 구간 이동 + 요약 */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => goWeek(1)}
+            disabled={weekOffset >= MAX_WEEK_OFFSET}
+            title="이전 7일"
+            className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-page hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="min-w-[104px] text-center text-[12px] font-bold text-foreground">
+            {kstShortDay(model.rangeStartMs)} – {kstShortDay(model.rangeEndMs)}
+          </span>
+          <button
+            type="button"
+            onClick={() => goWeek(-1)}
+            disabled={weekOffset === 0}
+            title="다음 7일"
+            className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-page hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        <span className="text-[11px] text-muted-foreground">
+          과열 <b className="text-destructive">{model.totalOverheats}</b>회 · 수신 {model.sampleCount.toLocaleString()}건
+        </span>
+        {weekOffset === 0 && <span className="text-[11px] text-muted-foreground">최근 {HEATMAP_DAYS}일</span>}
+        {isFetchingMore && <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />더 받는 중…</span>}
+        {truncated && <span className="text-[11px] text-warning">조회 상한에 걸려 일부 구간이 빠졌습니다</span>}
+        {weekOffset >= MAX_WEEK_OFFSET && (
+          <span className="text-[11px] text-muted-foreground">보관 한도(1개월)까지 왔습니다</span>
+        )}
       </div>
+
+      {/* 이 구간에 데이터가 아예 없을 때 — 빈 히트맵은 '고장'으로 읽힌다 */}
+      {!isFetchingMore && model.sampleCount === 0 && (
+        <p className="rounded-xl bg-page px-4 py-3 text-[12px] text-muted-foreground">
+          이 기간에는 수신된 기록이 없습니다. 기기 등록 이전이거나 전원이 꺼져 있던 구간일 수 있습니다.
+        </p>
+      )}
 
       {/* ── A. 히트맵 ── */}
       <div>
