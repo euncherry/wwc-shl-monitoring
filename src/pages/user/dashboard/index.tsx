@@ -310,7 +310,7 @@ export default function UserDashboard() {
                   tone={summary.normalPct === 100 ? 'success' : summary.normalPct >= 80 ? 'muted' : 'danger'}
                 />
                 <span className="ml-auto text-[11px] text-muted-foreground">
-                  24시간 미만 꺼짐은 정상으로 집계(일과 후 소등 포함)
+                  48시간 미만 꺼짐은 정상으로 집계(일과 후 소등·주말 휴관 포함)
                 </span>
               </div>
               <DeviceMap

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import { DashboardBanner, BannerButton } from '@/components/dashboard/DashboardBanner'
+import { BrandPanel } from '@/components/dashboard/BrandPanel'
 import { kstBannerDate, formatKstTime, toMs } from '@/lib/kst'
 import { useDevices } from '@/hooks/useDevices'
 import { useZones } from '@/hooks/useZones'
@@ -102,6 +103,64 @@ function StatChip({ label, value, tone = 'muted' }: { label: string; value: numb
       {label}
       <b className={`font-bold tabular-nums ${cls}`}>{value}</b>
     </span>
+  )
+}
+
+/** 기기 배치 파이프라인 한 단계 — 왼쪽 레일(점 + 연결선) + 라벨·건수 + 대기 기기 칩.
+ *  칩은 클릭하면 기기 상세 모달로 간다. 칩이 많으면 6개까지만 두고 나머지는 '외 N대'로 접는다. */
+function PipelineStep({
+  label,
+  count,
+  dot,
+  countCls,
+  chipCls,
+  devices = [],
+  note,
+  last,
+  onSelect,
+}: {
+  label: string
+  count: number
+  /** 점 색 + ring 색 (ring은 점 둘레 후광) */
+  dot: string
+  countCls: string
+  chipCls?: string
+  devices?: HearingLoop[]
+  note?: string
+  last?: boolean
+  onSelect?: (d: HearingLoop) => void
+}) {
+  const shown = devices.slice(0, 6)
+  return (
+    <div className="flex gap-3">
+      <div className="flex w-4 shrink-0 flex-col items-center">
+        <span className={`mt-[3px] h-2.5 w-2.5 shrink-0 rounded-full ring-[3px] ${dot}`} />
+        {!last && <span className="mt-1 w-0.5 flex-1 bg-border/60" />}
+      </div>
+      <div className={`min-w-0 flex-1 ${last ? 'pb-3.5' : 'pb-4'}`}>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12.5px] font-bold text-foreground">{label}</span>
+          <span className={`text-[15px] font-extrabold tabular-nums ${countCls}`}>{count}</span>
+        </div>
+        {shown.length > 0 && (
+          <div className="mt-[7px] flex flex-wrap gap-1.5">
+            {shown.map((d) => (
+              <button
+                key={d.mac}
+                onClick={() => onSelect?.(d)}
+                className={`max-w-full truncate rounded-md px-2 py-1 font-mono text-[11px] font-semibold transition-opacity hover:opacity-70 ${chipCls}`}
+              >
+                {d.alias?.trim() || d.mac}
+              </button>
+            ))}
+            {devices.length > shown.length && (
+              <span className="px-1 py-1 text-[11px] text-muted-foreground">외 {devices.length - shown.length}대</span>
+            )}
+          </div>
+        )}
+        {note && <p className="mt-1 text-[11px] text-muted-foreground">{note}</p>}
+      </div>
+    </div>
   )
 }
 
@@ -202,13 +261,14 @@ export default function AdminDashboard() {
         tickerRight={`SEONGDONG-GU · KST ${formatKstTime(nowMs)}`}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_400px] items-start">
+      <div className="grid gap-6 xl:grid-cols-[1fr_400px]">
 
         {/* ══ Left column ══ */}
         <div className="flex flex-col gap-6 min-w-0">
 
-          {/* ① 지도뷰 — 마커·지도는 그대로, 헤더에 요약 한 줄만 추가 */}
-          <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+          {/* ① 지도뷰 — 마커·지도는 그대로, 헤더에 요약 한 줄만 추가.
+              flex-1로 우측 열 높이에 맞춰 지도가 늘거나 준다 */}
+          <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-b border-border">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
@@ -228,7 +288,13 @@ export default function AdminDashboard() {
                 확인 필요 {watchHours}시간+ · 장애 24시간+ 미연결
               </span>
             </div>
-            <DeviceMap devices={devices} onSelect={setSelectedDevice} heightClass="h-[400px]" />
+            <DeviceMap
+              devices={devices}
+              onSelect={setSelectedDevice}
+              className="flex min-h-0 flex-1 flex-col"
+              /* 단일 열(xl 미만)에선 늘 자리가 없어 하한값이 곧 높이가 된다 */
+              heightClass="min-h-[400px] flex-1 xl:min-h-[320px]"
+            />
           </div>
 
           {/* ⑤ Wi-Fi 신호 — 위: RSSI 분포 스트립 / 아래: 약한 순 목록(스크롤) */}
@@ -555,60 +621,50 @@ export default function AdminDashboard() {
             title="기기 배치 현황"
             action={<LinkButton label="관리" onClick={() => navigate('/admin/hearing-loops')} />}
           >
-            <div className="px-5 py-5">
+            <div className="px-5 pb-2 pt-[18px]">
               {devicesLoading ? (
-                <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                <div className="flex items-center gap-2 pb-3 text-[12px] text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />불러오는 중…
                 </div>
-              ) : pipeline.provisioning === 0 && pipeline.awaitingZone === 0 ? (
-                <p className="rounded-xl bg-success/10 px-3 py-3 text-[12px] font-semibold text-success">
-                  {summary.total}대 모두 AWS IoT 등록·존 배정 완료
-                </p>
               ) : (
                 <>
-                  <div className="flex items-stretch gap-1.5 text-center">
-                    <div className="flex-1 rounded-xl bg-warning/10 px-2 py-3">
-                      <p className="text-[19px] font-bold leading-none text-warning">{pipeline.provisioning}</p>
-                      <p className="mt-1.5 text-[11px] leading-tight text-warning/80">프로비저닝<br />대기</p>
-                    </div>
-                    <div className="flex items-center"><ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" /></div>
-                    <div className="flex-1 rounded-xl bg-primary/10 px-2 py-3">
-                      <p className="text-[19px] font-bold leading-none text-primary">{pipeline.awaitingZone}</p>
-                      <p className="mt-1.5 text-[11px] leading-tight text-primary/80">존 배정<br />대기</p>
-                    </div>
-                    <div className="flex items-center"><ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" /></div>
-                    <div className="flex-1 rounded-xl bg-page px-2 py-3">
-                      <p className="text-[19px] font-bold leading-none text-foreground">{pipeline.operating}</p>
-                      <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground">운영 중</p>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                    {pipeline.provisioning > 0
-                      ? `서버 등록은 됐지만 아직 한 번도 연결되지 않은 기기가 ${pipeline.provisioning}대 있습니다.`
-                      : `AWS IoT 등록은 ${summary.total}대 모두 완료됐습니다.`}
-                  </p>
-                  {[...pipeline.provisioningDevices, ...pipeline.awaitingZoneDevices].slice(0, 3).length > 0 && (
-                    <div className="mt-2.5 space-y-1">
-                      {[...pipeline.provisioningDevices, ...pipeline.awaitingZoneDevices].slice(0, 3).map((d) => (
-                        <button
-                          key={d.mac}
-                          onClick={() => setSelectedDevice(d)}
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-page"
-                        >
-                          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">{d.alias || d.mac}</span>
-                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                            d.provisionStatus === 'PENDING' ? 'bg-warning/15 text-warning' : 'bg-primary/10 text-primary'
-                          }`}>
-                            {d.provisionStatus === 'PENDING' ? '프로비저닝' : '존 배정'}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <PipelineStep
+                    label="프로비저닝 대기"
+                    count={pipeline.provisioning}
+                    dot="bg-warning ring-warning/15"
+                    countCls="text-warning"
+                    chipCls="bg-warning/10 text-warning"
+                    devices={pipeline.provisioningDevices}
+                    onSelect={setSelectedDevice}
+                  />
+                  <PipelineStep
+                    label="존 배정 대기"
+                    count={pipeline.awaitingZone}
+                    dot="bg-primary ring-primary/15"
+                    countCls="text-primary"
+                    chipCls="bg-primary/10 text-primary"
+                    devices={pipeline.awaitingZoneDevices}
+                    onSelect={setSelectedDevice}
+                  />
+                  <PipelineStep
+                    label="운영 중"
+                    count={pipeline.operating}
+                    dot="bg-success ring-success/15"
+                    countCls="text-foreground"
+                    last
+                    note={
+                      pipeline.provisioning === 0 && pipeline.awaitingZone === 0
+                        ? `${summary.total}대 모두 등록·배정 완료`
+                        : '존 배정 완료 · 정상 운영'
+                    }
+                  />
                 </>
               )}
             </div>
           </CardShell>
+
+          {/* ⑦ 브랜드 패널 (디자인 B) */}
+          <BrandPanel footnote={`전체 ${summary.total}대 운영 중`} />
         </div>
       </div>
 

@@ -1,16 +1,11 @@
 import { createElement, type ReactNode } from 'react'
-import { Radio, Power, PowerOff, Thermometer, Wifi, WifiOff, Building2, AlertTriangle } from 'lucide-react'
+import { Radio, Power, PowerOff, Thermometer, Wifi, WifiOff, Building2, AlertTriangle, ChevronRight } from 'lucide-react'
 import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { HearingLoop, ConnectionStatus, WifiSignal } from '@/types/device'
-import { WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
+import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
-import {
-  deriveUserStatus,
-  isSoftOff,
-  isWifiCut,
-  type UserDeviceStatus,
-} from '@/lib/userDeviceDisplay'
+import { deriveUserStatus, isSoftOff, type UserDeviceStatus } from '@/lib/userDeviceDisplay'
 
 /* ══════════════════════════════════════════════════════
    사용자(기관) 페이지 기기 표시 컴포넌트.
@@ -49,7 +44,9 @@ export function StatusBadge({ status }: { status: UserDeviceStatus }) {
   }
   const s = m[status]
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${s.cls}`}>
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${s.cls}`}
+    >
       <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
@@ -74,6 +71,15 @@ export function connTone(s: ConnectionStatus): Tone {
 
 export function wifiTone(s: WifiSignal): Tone {
   return s === 'STRONG' || s === 'FAIR' ? 'success' : s === 'WEAK' ? 'warning' : 'destructive'
+}
+
+/** 톤 → 글자색만. 칩 배경 없이 아이콘·텍스트만 쓰는 자리(테이블 칸, 대시보드 목록)에서 쓴다. */
+export const TONE_TEXT: Record<Tone, string> = {
+  success: 'text-success',
+  warning: 'text-warning',
+  destructive: 'text-destructive',
+  muted: 'text-muted-foreground',
+  info: 'text-primary',
 }
 
 export function StatusChip({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: Tone }) {
@@ -102,12 +108,11 @@ export interface ChipProps {
  * 실증 페이지가 손으로 칩을 재현하지 않도록 계산은 여기 한 곳에만 둔다.
  */
 export function userChipProps(device: HearingLoop) {
-  /* 24h 미만 꺼짐은 정상으로 연출, 4h 이상부터 WiFi만 회색 '끊김' (isSoftOff·isWifiCut 참고) */
+  /* 48h 미만 꺼짐(soft-off)은 전부 정상으로 연출한다 — WiFi도, 과열도. (isSoftOff 참고) */
   const softOff = isSoftOff(device)
   const alive = device.power || softOff
   const dispConn: ConnectionStatus = softOff ? 'ONLINE' : device.connectionStatus
   const conn = connectionMeta(dispConn)
-  const wifiCut = softOff && isWifiCut(device)
 
   const power: ChipProps = {
     icon: alive ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />,
@@ -123,23 +128,26 @@ export function userChipProps(device: HearingLoop) {
   }
   const wifi: ChipProps = {
     icon:
-      softOff
-        ? (wifiCut ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />)
-        : device.wifiSignal === 'DISCONNECTED'
-          ? <WifiOff className="h-4 w-4" />
-          : <Wifi className="h-4 w-4" />,
+      !softOff && device.wifiSignal === 'DISCONNECTED' ? (
+        <WifiOff className="h-4 w-4" />
+      ) : (
+        <Wifi className="h-4 w-4" />
+      ),
     label: 'WiFi',
-    value: !alive ? '—' : softOff ? (wifiCut ? '끊김' : '정상') : WIFI_SIGNAL_LABEL[device.wifiSignal],
-    tone: !alive ? 'muted' : softOff ? (wifiCut ? 'muted' : 'success') : wifiTone(device.wifiSignal),
+    value: !alive ? '—' : softOff ? '정상' : WIFI_SIGNAL_LABEL[device.wifiSignal],
+    tone: !alive ? 'muted' : softOff ? 'success' : wifiTone(device.wifiSignal),
   }
+  /* soft-off 구간에서는 마지막 실측 과열도 감춘다 — 유예 창 안에서는 '전부 정상'이 원칙.
+     켜져 있는 기기의 과열은 유예 대상이 아니므로 그대로 빨갛게 뜬다. */
+  const overheating = alive && !softOff && device.overTemperature
   const overheat: ChipProps = {
     icon: <Thermometer className="h-4 w-4" />,
     label: '과열',
-    value: !alive ? '—' : device.overTemperature ? '과열' : '정상',
-    tone: !alive ? 'muted' : device.overTemperature ? 'destructive' : 'success',
+    value: !alive ? '—' : overheating ? '과열' : '정상',
+    tone: !alive ? 'muted' : overheating ? 'destructive' : 'success',
   }
 
-  return { softOff, alive, dispConn, wifiCut, power, operation, wifi, overheat }
+  return { softOff, alive, dispConn, power, operation, wifi, overheat }
 }
 
 /** 사용자 페이지 기기 카드 — 헤더(뱃지) + 상태 칩 2×2 + 푸터 */
@@ -206,5 +214,144 @@ export function UserDeviceCard({ device, onClick }: { device: HearingLoop; onCli
         <span className="shrink-0">{formatDateTime(device.lastUpdated)}</span>
       </div>
     </div>
+  )
+}
+
+/* ── 테이블 뷰 (md 이상) — 관리자 목록(AdminDeviceRow)과 같은 컬럼·같은 배치.
+   ⚠️ 다른 건 값뿐이다: 관리자는 실시간 원값, 여기는 사용자 표시 정책(4h/24h 유예)을 통과한 값.
+      <table><tbody> 안에서만 렌더 가능. */
+
+const U_HEAD = 'px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
+const U_HEAD_C = 'px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
+
+export function UserDeviceTableHead() {
+  return (
+    <thead>
+      <tr className="border-b border-border bg-page/50">
+        <th className={U_HEAD}>기기</th>
+        <th className={U_HEAD}>텔레코일존</th>
+        <th className={U_HEAD_C}>전원</th>
+        <th className={U_HEAD_C}>동작</th>
+        <th className={U_HEAD_C}>WiFi</th>
+        <th className={U_HEAD_C}>과열</th>
+        <th className={U_HEAD_C}>펌웨어</th>
+        <th className={U_HEAD}>최근 업데이트</th>
+        <th className="w-12 px-5 py-3" />
+      </tr>
+    </thead>
+  )
+}
+
+export function UserDeviceTableRow({ device, onClick }: { device: HearingLoop; onClick?: () => void }) {
+  const uStatus = deriveUserStatus(device)
+  const chips = userChipProps(device)
+  const { alive, softOff, dispConn } = chips
+  const hasAlias = Boolean(device.alias?.trim())
+  const conn = connectionMeta(dispConn)
+
+  /* WiFi 칸 — 아이콘 아래 실측값(dBm)과 SSID. 정책상 값을 감추는 구간은 문구로 대체한다 */
+  const wifiSub = !alive ? '—' : softOff ? '정상' : device.wifiRssi != null ? `${device.wifiRssi}dBm` : '—'
+
+  return (
+    <tr onClick={onClick} className="group cursor-pointer transition-colors hover:bg-main-blue-1/10">
+      <td className="px-5 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+              uStatus === 'normal'
+                ? 'bg-success/10'
+                : uStatus === 'warning'
+                  ? 'bg-warning/10'
+                  : uStatus === 'offline'
+                    ? 'bg-muted'
+                    : 'bg-destructive/10'
+            }`}
+          >
+            <Radio
+              className={`h-4 w-4 ${
+                uStatus === 'normal'
+                  ? 'text-success'
+                  : uStatus === 'warning'
+                    ? 'text-warning'
+                    : uStatus === 'offline'
+                      ? 'text-muted-foreground'
+                      : 'text-destructive'
+              }`}
+            />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-[13px] font-bold text-foreground">{displayTitle(device)}</p>
+              {device.firmwareInconsistent && <FirmwareInconsistentBadge />}
+            </div>
+            {hasAlias && <p className="font-mono text-[11px] text-muted-foreground">{device.mac}</p>}
+          </div>
+        </div>
+      </td>
+
+      <td className="px-5 py-3.5">
+        <p className="text-[13px] font-semibold text-foreground">{device.telecoilZoneName ?? '—'}</p>
+      </td>
+
+      <td className="px-5 py-3.5 text-center" title={alive ? '전원 ON' : '전원 OFF'}>
+        <div className="flex justify-center">
+          {alive ? <Power className="h-4 w-4 text-success" /> : <PowerOff className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </td>
+
+      <td className="px-5 py-3.5 text-center" title={conn.label}>
+        <div className="flex justify-center">
+          {createElement(conn.Icon, { className: `h-4 w-4 ${conn.color}` })}
+        </div>
+      </td>
+
+      <td className="px-5 py-3.5 text-center">
+        <div className="flex flex-col items-center gap-0.5">
+          {!alive ? (
+            <WifiOff className="h-4 w-4 text-muted-foreground" />
+          ) : softOff ? (
+            <Wifi className="h-4 w-4 text-success" />
+          ) : (
+            <WifiSignalIcon signal={device.wifiSignal} />
+          )}
+          <span className="text-[10px] tabular-nums text-muted-foreground">{wifiSub}</span>
+          {alive && device.wifiSsid && (
+            <span className="max-w-[96px] truncate text-[10px] text-muted-foreground" title={device.wifiSsid}>
+              {device.wifiSsid}
+            </span>
+          )}
+        </div>
+      </td>
+
+      <td className="px-5 py-3.5 text-center">
+        <span className={`text-[13px] font-semibold ${TONE_TEXT[chips.overheat.tone]}`}>{chips.overheat.value}</span>
+      </td>
+
+      <td className="px-5 py-3.5 text-center">
+        <div className="inline-flex flex-col items-center gap-1">
+          {device.firmwareVersion && (
+            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[9px] font-bold text-muted-foreground">
+              세트 v{device.firmwareVersion}
+            </span>
+          )}
+          <p className="text-[10px] leading-tight text-muted-foreground">
+            <span className="font-medium">WiFi</span>{' '}
+            <span className="font-mono font-semibold text-foreground">{device.wifiFirmwareVersion || '—'}</span>
+          </p>
+          <p className="text-[10px] leading-tight text-muted-foreground">
+            <span className="font-medium">HL</span>{' '}
+            <span className="font-mono font-semibold text-foreground">{device.hlFirmwareVersion || '—'}</span>
+          </p>
+        </div>
+      </td>
+
+      <td className="px-5 py-3.5">
+        <span className="whitespace-nowrap text-[12px] text-muted-foreground">{formatDateTime(device.lastUpdated)}</span>
+      </td>
+
+      <td className="px-3 py-3.5 text-center">
+        <ChevronRight className="mx-auto h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+      </td>
+    </tr>
   )
 }

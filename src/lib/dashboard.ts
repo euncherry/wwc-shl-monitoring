@@ -21,7 +21,9 @@ export const DAY_MS = 24 * HOUR_MS
 export const OVERHEAT_RECENT_MS = DAY_MS
 export const OVERHEAT_WINDOW_MS = 7 * DAY_MS
 
-/** 미연결 '장애' 승격 — 유저 페이지 정책(userDeviceDisplay.DISCONNECT_ALERT_MS)과 같은 24시간 */
+/** 미연결 '장애' 승격 — **관리자 화면 기준 24시간**.
+ *  ⚠️ 유저 페이지 정책(userDeviceDisplay.DISCONNECT_ALERT_MS)은 2026-09-02에 48시간으로 분기했다.
+ *     관리자는 운영·점검용이라 더 짧게 유지한다. 두 값을 다시 묶지 말 것. */
 export const OFFLINE_FAULT_MS = DAY_MS
 
 /* ── 기기 상태 요약 ─────────────────────────────────── */

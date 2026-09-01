@@ -143,15 +143,6 @@ export default function LoginPage() {
             관리자 문의
           </button>
         </div>
-
-        {/* Demo hint */}
-        <div className="mt-10 rounded-lg bg-main-blue-1/40 border border-main-blue-1 p-4">
-          <p className="text-xs font-medium text-primary-dark/60 mb-2">데모 계정</p>
-          <div className="space-y-1 text-xs text-muted-foreground">
-            <p>관리자: <span className="font-mono font-semibold text-primary-dark">admin</span> / <span className="font-mono font-semibold text-primary-dark">admin1234</span></p>
-            <p>사용자 계정은 관리자가 발급합니다.</p>
-          </div>
-        </div>
       </div>
     </AuthLayout>
   )

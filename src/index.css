@@ -100,3 +100,44 @@
   100% { transform: scale(1.45); opacity: 0; }
 }
 .hl-ripple { animation: hl-ripple 4.5s linear infinite; }
+
+/* ── 로그인 좌측 대시보드 목업 애니메이션 ──
+   실제 데이터가 아니라 '살아 있는 대시보드'라는 인상만 주는 장식이다.
+   전부 transform/opacity만 건드려 합성 레이어에서 처리되게 한다. */
+
+/* 카드 등장 — 아래에서 살짝 올라오며 페이드 */
+@keyframes hl-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.hl-rise { animation: hl-rise .7s cubic-bezier(.22,.61,.36,1) both; }
+
+/* 스켈레톤 줄 — 좌→우 하이라이트 스윕 */
+@keyframes hl-shimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+.hl-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(36,107,209,.16), transparent);
+  animation: hl-shimmer 2.4s ease-in-out infinite;
+}
+
+/* 로고 파문 — 배너의 hl-ripple보다 작고 빠르게 */
+@keyframes hl-pulse-ring {
+  0%   { transform: scale(1);   opacity: .45; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+.hl-pulse-ring { animation: hl-pulse-ring 2.6s ease-out infinite; }
+
+/* 움직임 최소화를 선택한 사용자에게는 장식 애니메이션을 끈다 */
+@media (prefers-reduced-motion: reduce) {
+  .hl-rise, .hl-shimmer::after, .hl-pulse-ring,
+  .hl-sweep, .hl-ripple {
+    animation: none !important;
+  }
+  .hl-rise { opacity: 1; transform: none; }
+}

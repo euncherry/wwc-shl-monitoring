@@ -20,9 +20,7 @@ import { connectionMeta } from '@/lib/connectionStatus'
 import {
   deriveUserStatus,
   isSoftOff,
-  isWifiCut,
   DISCONNECT_ALERT_MS,
-  WIFI_CUT_SHOW_MS,
 } from '@/lib/userDeviceDisplay'
 import { useDevices } from '@/hooks/useDevices'
 import { useAlertThresholds } from '@/hooks/useAlerts'
@@ -233,7 +231,7 @@ function OperationThresholdBlock() {
       </div>
       <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
         백엔드 서버가 <span className="font-semibold text-foreground">30분 주기</span>로 전체 기기를 자동 점검해, 미연결이 임계값(기본 4시간) 이상
-        지속된 기기에 '연결 끊김' 장애 알림(긴급)을 자동 생성합니다. 사용자 페이지의 '연결 끊김' 표시 기준(24시간)은 화면 표시 정책으로
+        지속된 기기에 '연결 끊김' 장애 알림(긴급)을 자동 생성합니다. 사용자 페이지의 '연결 끊김' 표시 기준(48시간)은 화면 표시 정책으로
         고정이며 이 설정과 무관합니다.
       </p>
       <div className="mt-3 overflow-x-auto rounded-lg border border-border">
@@ -321,7 +319,7 @@ function Basis({ device, offlineFor }: { device: HearingLoop; offlineFor?: numbe
         <span className="font-bold text-foreground">
           {uStatus === 'disconnected' ? '연결 끊김' : uStatus === 'normal' ? '정상' : uStatus}
         </span>
-        {isSoftOff(device) && <span className="text-foreground"> · soft-off{isWifiCut(device) ? ' · WiFi 끊김' : ''}</span>}
+        {isSoftOff(device) && <span className="text-foreground"> · soft-off</span>}
       </div>
     </div>
   )
@@ -400,8 +398,7 @@ function LiveDeviceSection() {
   const bucket = (d: HearingLoop) => {
     if (d.power) return '연결 중'
     const u = deriveUserStatus(d)
-    if (u === 'disconnected') return '24시간 이상'
-    return isWifiCut(d) ? '4~24시간' : '4시간 미만'
+    return u === 'disconnected' ? '48시간 이상' : '48시간 미만'
   }
 
   return (
@@ -433,7 +430,7 @@ export default function StatusSpecPage() {
   const now = Date.now()
   const f = (spec: FixtureSpec) => makeFixture(spec, now)
 
-  /* ① 미연결 지속 시간 3단계 */
+  /* ① 미연결 지속 시간 2단계 */
   const stages: { label: string; note: string; offlineFor: number | null; device: HearingLoop }[] = [
     {
       label: '연결 중 (정상 가동)',
@@ -442,31 +439,29 @@ export default function StatusSpecPage() {
       device: f({ id: 1, mac: 'AA:BB:CC:00:00:01', alias: '1층 안내데스크', zoneName: '성동구청', connection: 'ONLINE', wifi: 'FAIR', rssi: -60 }),
     },
     {
-      label: '미연결 2시간 — 4시간 미만',
+      label: '미연결 2시간 — 48시간 미만',
       note: '전부 정상 연출',
       offlineFor: 2 * HOUR,
       device: f({ id: 2, mac: 'AA:BB:CC:00:00:02', alias: '2층 민원실', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 2 * HOUR }),
     },
     {
-      label: '미연결 6시간 — 4~24시간',
-      note: 'WiFi만 회색 "끊김"',
-      offlineFor: 6 * HOUR,
-      device: f({ id: 3, mac: 'AA:BB:CC:00:00:03', alias: '3층 대회의실', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 6 * HOUR }),
+      label: '미연결 30시간 — 48시간 미만',
+      note: '여전히 전부 정상 연출 (WiFi·과열 포함)',
+      offlineFor: 30 * HOUR,
+      device: f({ id: 3, mac: 'AA:BB:CC:00:00:03', alias: '3층 대회의실', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 30 * HOUR }),
     },
     {
-      label: '미연결 30시간 — 24시간 이상',
+      label: '미연결 60시간 — 48시간 이상',
       note: '연결 끊김 + 진짜 상태 노출',
-      offlineFor: 30 * HOUR,
-      device: f({ id: 4, mac: 'AA:BB:CC:00:00:04', alias: '지하 주차장', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 30 * HOUR }),
+      offlineFor: 60 * HOUR,
+      device: f({ id: 4, mac: 'AA:BB:CC:00:00:04', alias: '지하 주차장', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 60 * HOUR }),
     },
   ]
 
-  /* ② 경계값 — 4시간 경계는 Wi-Fi만, 24시간 경계는 세 항목 전부가 바뀐다 */
+  /* ② 경계값 — 경계는 48시간 하나뿐이고, 넘는 순간 세 항목이 한꺼번에 바뀐다 */
   const edges: { label: string; note: string; offlineFor: number; device: HearingLoop; items: SpecItem[] }[] = [
-    { label: '3시간 59분', note: 'WiFi 정상 유지', offlineFor: 3 * HOUR + 59 * MINUTE, items: ['network'], device: f({ id: 11, mac: 'AA:BB:CC:00:01:01', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 3 * HOUR + 59 * MINUTE }) },
-    { label: '4시간 1분', note: 'WiFi 회색 "끊김"으로 전환', offlineFor: 4 * HOUR + 1 * MINUTE, items: ['network'], device: f({ id: 12, mac: 'AA:BB:CC:00:01:02', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 4 * HOUR + 1 * MINUTE }) },
-    { label: '23시간 59분', note: '아직 정상 뱃지', offlineFor: 23 * HOUR + 59 * MINUTE, items: ALL_ITEMS, device: f({ id: 13, mac: 'AA:BB:CC:00:01:03', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 23 * HOUR + 59 * MINUTE }) },
-    { label: '24시간 1분', note: '연결 끊김으로 전환', offlineFor: 24 * HOUR + 1 * MINUTE, items: ALL_ITEMS, device: f({ id: 14, mac: 'AA:BB:CC:00:01:04', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 24 * HOUR + 1 * MINUTE }) },
+    { label: '47시간 59분', note: '아직 전부 정상 뱃지', offlineFor: 47 * HOUR + 59 * MINUTE, items: ALL_ITEMS, device: f({ id: 13, mac: 'AA:BB:CC:00:01:03', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 47 * HOUR + 59 * MINUTE }) },
+    { label: '48시간 1분', note: '연결 끊김으로 전환', offlineFor: 48 * HOUR + 1 * MINUTE, items: ALL_ITEMS, device: f({ id: 14, mac: 'AA:BB:CC:00:01:04', zoneName: '성동구청', connection: 'OFFLINE', offlineFor: 48 * HOUR + 1 * MINUTE }) },
   ]
 
   /* ③ WiFi 4등급 (연결 중 실값 + 끊김) */
@@ -550,10 +545,10 @@ export default function StatusSpecPage() {
               </p>
             </div>
             <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-[12px] font-bold text-foreground">사용자(기관) 페이지 — 미연결 지속 시간 기준 3단계</p>
+              <p className="text-[12px] font-bold text-foreground">사용자(기관) 페이지 — 미연결 지속 시간 기준 2단계</p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                4시간 미만 정상 · 4~24시간 WiFi만 회색 '끊김' · 24시간 이상 '연결 끊김'.
-                야간 소등 같은 일상적 전원 차단을 장애로 표시하지 않기 위함.
+                48시간 미만은 전원·동작·WiFi·과열을 <b className="font-semibold">전부 정상</b>으로 연출 ·
+                48시간 이상만 '연결 끊김'. 야간 소등·주말 휴관 같은 일상적 전원 차단을 장애로 표시하지 않기 위함.
               </p>
             </div>
           </div>
@@ -582,9 +577,9 @@ export default function StatusSpecPage() {
           ]}
           userRows={[
             { label: '연결 중', device: stages[0].device },
-            { label: '미연결 4시간 미만', device: stages[1].device },
-            { label: '미연결 4~24시간', device: stages[2].device },
-            { label: '미연결 24시간 이상', device: stages[3].device },
+            { label: '미연결 2시간 — 48시간 미만', device: stages[1].device },
+            { label: '미연결 30시간 — 48시간 미만', device: stages[2].device },
+            { label: '미연결 48시간 이상', device: stages[3].device },
           ]}
         />
 
@@ -606,9 +601,9 @@ export default function StatusSpecPage() {
           ]}
           userRows={[
             { label: '연결 중', device: stages[0].device },
-            { label: '미연결 4시간 미만', device: stages[1].device },
-            { label: '미연결 4~24시간', device: stages[2].device },
-            { label: '미연결 24시간 이상', device: stages[3].device },
+            { label: '미연결 2시간 — 48시간 미만', device: stages[1].device },
+            { label: '미연결 30시간 — 48시간 미만', device: stages[2].device },
+            { label: '미연결 48시간 이상', device: stages[3].device },
           ]}
         />
 
@@ -630,9 +625,9 @@ export default function StatusSpecPage() {
           ]}
           userRows={[
             { label: '연결 중', device: stages[0].device },
-            { label: '미연결 4시간 미만', device: stages[1].device },
-            { label: '미연결 4~24시간', device: stages[2].device },
-            { label: '미연결 24시간 이상', device: stages[3].device },
+            { label: '미연결 2시간 — 48시간 미만', device: stages[1].device },
+            { label: '미연결 30시간 — 48시간 미만', device: stages[2].device },
+            { label: '미연결 48시간 이상', device: stages[3].device },
           ]}
         />
 
@@ -652,8 +647,7 @@ export default function StatusSpecPage() {
             <>
               동일한 기기 상태를 두 페이지가 어떻게 다르게 표시하는지 나란히 비교합니다.
               판정 기준은 <span className="font-mono font-semibold">disconnected_at</span>(연결이 끊긴 시각)이며,
-              임계값은 <span className="font-semibold">{DISCONNECT_ALERT_MS / HOUR}시간</span>(연결 끊김) ·{' '}
-              <span className="font-semibold">{WIFI_CUT_SHOW_MS / HOUR}시간</span>(WiFi 끊김 표시)입니다.
+              임계값은 <span className="font-semibold">{DISCONNECT_ALERT_MS / HOUR}시간</span>(연결 끊김) 하나뿐입니다.
             </>
           }
         >
@@ -669,7 +663,7 @@ export default function StatusSpecPage() {
           n="B"
           title="임계값 경계 동작 검증"
           items={ALL_ITEMS}
-          desc="임계값 직전과 직후를 나란히 배치해 4시간·24시간 경계에서 표시가 실제로 전환되는지 확인합니다."
+          desc="임계값 직전과 직후를 나란히 배치해 48시간 경계에서 표시가 실제로 전환되는지 확인합니다."
         >
           <div className="space-y-4">
             {edges.map((e) => (
