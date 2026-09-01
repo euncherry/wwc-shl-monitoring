@@ -3,44 +3,27 @@ import axios from 'axios'
 import {
   Mail,
   Building2,
-  MapPin,
-  Phone,
   Pencil,
   Check,
   X,
   User,
   Hash,
+  Lock,
+  Phone,
   ShieldCheck,
   AlertCircle,
   Loader2,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useUpdateUser } from '@/hooks/useUsers'
+import { SUPPORT_CONTACT } from '@/lib/support'
 
 /* ══════════════════════════════════════════════════════
-   정보관리 — 기관 정보(기관명 실값·주소/대표번호 목) + 담당자(이름·계정ID 실값·이메일 실연동)
+   정보관리 — 내 정보(기관명·이름·계정ID 읽기 / 이메일 실연동) + 비밀번호 변경
+
+   ⚠️ 기관 주소·대표번호는 Zone 엔티티에 필드가 없어 목(localStorage)으로 흉내내다가
+      2026-09-02에 제거했다. 백엔드에 생기면 '내 정보' 카드에 행으로 추가하면 된다.
    ══════════════════════════════════════════════════════ */
-
-interface MockInstitution {
-  address: string
-  phone: string
-}
-
-const DEFAULT_INSTITUTION: MockInstitution = {
-  address: '주소 미등록',
-  phone: '대표번호 미등록',
-}
-
-/* 기관 주소·대표번호는 백엔드 필드가 없어 목 — zone별 localStorage 보존 */
-function loadMockInstitution(key: string): MockInstitution {
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw) return { ...DEFAULT_INSTITUTION, ...JSON.parse(raw) }
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_INSTITUTION
-}
 
 /* ══════════════════════════════════════════════════════
    Editable Field — 비동기 저장(이메일 PATCH) + 에러 지원
@@ -53,7 +36,6 @@ function EditableField({
   onSave,
   placeholder,
   type = 'text',
-  mock = false,
 }: {
   label: string
   value: string
@@ -61,7 +43,6 @@ function EditableField({
   onSave: (val: string) => Promise<void> | void
   placeholder?: string
   type?: string
-  mock?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [temp, setTemp] = useState(value)
@@ -104,10 +85,7 @@ function EditableField({
         <Icon className="h-4 w-4 text-primary" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] text-muted-foreground mb-1">
-          {label}
-          {mock && <span className="ml-1 inline-block rounded bg-warning/10 px-1.5 py-0.5 text-[9px] font-bold text-warning align-middle">목</span>}
-        </p>
+        <p className="mb-1 text-[12px] text-muted-foreground">{label}</p>
         {editing ? (
           <>
             <div className="flex items-center gap-2">
@@ -189,6 +167,48 @@ function ReadOnlyField({
 }
 
 /* ══════════════════════════════════════════════════════
+   비밀번호 안내 — 사용자는 직접 바꾸지 않는다(2026-09-02 결정).
+
+   백엔드에 PATCH /users/:id { password }가 있지만 현재 비밀번호를 확인하지 않아
+   토큰만 있으면 무단 변경이 가능하다. 그래서 사용자 화면에서는 기능을 열지 않고
+   관리자 재설정으로만 처리한다(관리자 텔레코일존 관리에 PW 재설정이 있다).
+   ══════════════════════════════════════════════════════ */
+
+function PasswordNotice() {
+  /* mt-auto — 카드가 좌측 카드 높이에 맞춰 늘어나도 이 블록은 항상 바닥에 붙는다 */
+  return (
+    <div className="mt-auto border-t border-border bg-page/30 px-6 py-5">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+          <Lock className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-foreground">비밀번호를 잊으셨나요?</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+            계정 ID와 비밀번호는 관리자가 관리합니다. 재설정이 필요하면 아래 연락처로 문의해 주세요.
+          </p>
+        </div>
+      </div>
+
+      {/* 연락처 — 아이콘 열(32px) + gap(12px) 만큼 들여써서 위 문단과 좌측 선을 맞춘다.
+          영업시간은 전화에만 걸리므로 전화 줄 안에 붙인다(가운데 따로 떠 있으면 이메일까지 걸리는 것처럼 읽힌다).
+          ⚠️ 읽기 전용 표기다 — 링크·hover·커서 변화 없음. */}
+      <div className="mt-3 space-y-1.5 pl-11">
+        <div className="flex items-center gap-2">
+          <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="text-[13px] font-bold tabular-nums text-foreground">{SUPPORT_CONTACT.phone}</span>
+          <span className="text-[11px] text-muted-foreground">{SUPPORT_CONTACT.phoneHours}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate text-[12.5px] font-semibold text-foreground">{SUPPORT_CONTACT.email}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════
    Main Page
    ══════════════════════════════════════════════════════ */
 
@@ -202,27 +222,11 @@ export default function UserSettings() {
   const username = user?.username ?? '—'
   const email = user?.email ?? ''
 
-  const instKey = `hl-inst-${user?.zoneId ?? 'none'}`
-  const [institution, setInstitution] = useState<MockInstitution>(() => loadMockInstitution(instKey))
   const [saved, setSaved] = useState(false)
 
   const showSaved = () => {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }
-
-  /* 주소·대표번호 = 목(localStorage 보존) */
-  const updateInstitution = (key: keyof MockInstitution, val: string) => {
-    setInstitution((prev) => {
-      const next = { ...prev, [key]: val }
-      try {
-        localStorage.setItem(instKey, JSON.stringify(next))
-      } catch {
-        /* ignore */
-      }
-      return next
-    })
-    showSaved()
   }
 
   /* 이메일 = 실연동 PATCH /users/:id (409 = 중복) */
@@ -246,7 +250,7 @@ export default function UserSettings() {
       <div className="pb-2">
         <h2 className="text-2xl font-black text-foreground tracking-tight mt-2">정보관리</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          소속 기관 정보와 담당자 이메일을 확인하고 수정할 수 있습니다.
+          소속 기관 정보를 확인하고 담당자 이메일을 수정할 수 있습니다.
         </p>
       </div>
 
@@ -277,50 +281,21 @@ export default function UserSettings() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* ─── 기관 정보 ─── */}
-        <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-page/40">
+      {/* 두 카드는 같은 높이로 늘어난다(grid 기본 stretch) — 계정 카드 하단 블록이 바닥에 붙도록 */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* ─── 기관 정보 — 이 기관이 누구고, 누구에게 연락하는가 ─── */}
+        <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+          <div className="flex items-center gap-2.5 border-b border-border bg-page/40 px-6 py-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
               <Building2 className="h-4 w-4 text-primary" />
             </div>
             <h3 className="text-[15px] font-bold text-foreground">기관 정보</h3>
           </div>
-          <div className="px-6 divide-y divide-border/50">
+          <div className="divide-y divide-border/50 px-6">
             <ReadOnlyField label="기관명" value={zoneName} icon={Building2} />
-            <EditableField
-              label="주소"
-              value={institution.address}
-              icon={MapPin}
-              onSave={(val) => updateInstitution('address', val)}
-              placeholder="주소를 입력하세요"
-              mock
-            />
-            <EditableField
-              label="대표번호"
-              value={institution.phone}
-              icon={Phone}
-              onSave={(val) => updateInstitution('phone', val)}
-              placeholder="전화번호를 입력하세요"
-              type="tel"
-              mock
-            />
-          </div>
-        </div>
-
-        {/* ─── 담당자 정보 ─── */}
-        <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-page/40">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <User className="h-4 w-4 text-primary" />
-            </div>
-            <h3 className="text-[15px] font-bold text-foreground">담당자 정보</h3>
-          </div>
-          <div className="px-6 divide-y divide-border/50">
             <ReadOnlyField label="담당자 이름" value={managerName} icon={User} />
-            <ReadOnlyField label="계정 ID" value={username} icon={Hash} />
             <EditableField
-              label="이메일"
+              label="담당자 이메일"
               value={email}
               icon={Mail}
               onSave={saveEmail}
@@ -329,11 +304,25 @@ export default function UserSettings() {
             />
           </div>
         </div>
+
+        {/* ─── 계정 정보 — 로그인 수단 ─── */}
+        <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+          <div className="flex items-center gap-2.5 border-b border-border bg-page/40 px-6 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+            </div>
+            <h3 className="text-[15px] font-bold text-foreground">계정 정보</h3>
+          </div>
+          <div className="divide-y divide-border/50 px-6">
+            <ReadOnlyField label="계정 ID" value={username} icon={Hash} />
+          </div>
+          <PasswordNotice />
+        </div>
       </div>
 
       {/* ─── 안내 문구 ─── */}
       <div className="rounded-xl bg-page/50 border border-border/50 px-5 py-3 text-[12px] text-muted-foreground">
-        기관명·담당자 이름·계정 ID는 관리자가 관리합니다. 주소·대표번호는 표시용 정보로, 변경 사항은 이 브라우저에 저장됩니다.
+        기관명·담당자 이름·계정 ID·비밀번호는 관리자가 관리합니다. 변경이 필요하면 관리자에게 문의해 주세요.
       </div>
     </div>
   )

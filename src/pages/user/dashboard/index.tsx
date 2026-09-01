@@ -5,8 +5,6 @@ import {
   Bell,
   CheckCircle,
   ChevronRight,
-  Phone,
-  Mail,
   LifeBuoy,
   Loader2,
   AlertCircle,
@@ -159,6 +157,30 @@ function DeviceSummaryRow({ device, onClick }: { device: HearingLoop; onClick: (
       <IconStat chip={chips.operation} />
       <IconStat chip={chips.wifi} />
     </button>
+  )
+}
+
+/** '도움이 필요하신가요' 자가진단 단계 카드 — 1·2단계(회색) 공통 */
+function HelpStep({ n, title, desc }: { n: number; title: string; desc: string }) {
+  return (
+    <div className="min-w-0 flex-1 rounded-xl border border-[#EDF1F6] bg-[#FAFBFD] px-[13px] py-3">
+      <div className="mb-[5px] flex items-center gap-[7px]">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EAF1FC] text-[10px] font-extrabold text-[#1D5BB8]">
+          {n}
+        </span>
+        <p className="truncate text-[12px] font-extrabold text-foreground">{title}</p>
+      </div>
+      <p className="text-[11px] leading-[1.5] text-[#8794A6]">{desc}</p>
+    </div>
+  )
+}
+
+/** 단계 사이 화살표 — 좁아지면(2열 미만) 숨긴다 */
+function StepArrow() {
+  return (
+    <span aria-hidden className="hidden shrink-0 self-center sm:block">
+      <ChevronRight className="h-[13px] w-[13px] text-[#B9C2CE]" />
+    </span>
   )
 }
 
@@ -441,31 +463,35 @@ export default function UserDashboard() {
               title="도움이 필요하신가요?"
               action={<LinkButton label="사용 가이드 보기" onClick={() => navigate('/user/support')} />}
             >
-              <div className="grid gap-3 p-5 lg:grid-cols-[minmax(0,1fr)_240px_240px] lg:items-center">
-                <div className="rounded-xl border border-border/50 bg-page/50 px-4 py-3 text-[12px] leading-[1.7] text-muted-foreground">
-                  기기에 <b className="font-semibold text-foreground">경고·연결 끊김</b>이 표시되면 전원과
-                  콘센트를 먼저 확인해 주세요. 그래도 해결되지 않으면 연락처로 문의해 주세요.
+              {/* 자가진단 3단계 — 전원 → 와이파이 → 문의. 좁아지면 세로로 쌓인다 */}
+              <div className="flex flex-col items-stretch gap-2 px-6 pb-[18px] pt-4 sm:flex-row">
+                <HelpStep n={1} title="전원·콘센트 확인" desc="경고·연결 끊김 대부분은 전원 문제" />
+                <StepArrow />
+                <HelpStep n={2} title="와이파이 확인" desc="공유기 전원·신호 세기 확인" />
+                <StepArrow />
+
+                {/* 3 — 문의. 마지막 단계라 살짝 강조(파란 톤 + 남색 배지) */}
+                <div className="min-w-0 flex-1 rounded-xl border border-[#DDE6F2] bg-[#F5F8FD] px-[13px] py-3 sm:flex-[1.3]">
+                  <div className="mb-[5px] flex items-center gap-[7px]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-dark text-[10px] font-extrabold text-white">
+                      3
+                    </span>
+                    <p className="truncate text-[12px] font-extrabold text-foreground">해결되지 않으면 문의</p>
+                  </div>
+                  <a
+                    href={`tel:${SUPPORT_CONTACT.phone}`}
+                    className="block text-[12px] font-extrabold tabular-nums text-[#132B52] transition-colors hover:text-primary"
+                  >
+                    {SUPPORT_CONTACT.phone}
+                    <span className="ml-1 text-[10.5px] font-normal text-[#8794A6]">{SUPPORT_CONTACT.phoneHours}</span>
+                  </a>
+                  <a
+                    href={`mailto:${SUPPORT_CONTACT.email}`}
+                    className="mt-0.5 block truncate text-[10.5px] text-[#5C6B80] transition-colors hover:text-primary"
+                  >
+                    {SUPPORT_CONTACT.email}
+                  </a>
                 </div>
-                <a
-                  href={`tel:${SUPPORT_CONTACT.phone}`}
-                  className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:border-primary/30 hover:bg-page/30"
-                >
-                  <Phone className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-semibold text-foreground">{SUPPORT_CONTACT.phone}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">{SUPPORT_CONTACT.phoneHours}</p>
-                  </div>
-                </a>
-                <a
-                  href={`mailto:${SUPPORT_CONTACT.email}`}
-                  className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:border-primary/30 hover:bg-page/30"
-                >
-                  <Mail className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-semibold text-foreground">{SUPPORT_CONTACT.email}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">영업일 기준 1~2일 내 답변</p>
-                  </div>
-                </a>
               </div>
             </CardShell>
           </div>
