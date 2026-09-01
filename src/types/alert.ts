@@ -44,6 +44,16 @@ export interface AlertListResponseDto {
   items: AlertResponseDto[]
 }
 
+/** MyAlertListResponseDto — GET /alerts/my (ZONE_USER).
+ *  ⚠️ 관리자용 AlertListResponseDto와 달리 통계 필드가 없다(total/page/limit/items뿐).
+ *  ⚠️ 백엔드가 status=FORWARDED로 고정 필터하므로 '관리자가 전달한 알림'만 내려온다. */
+export interface MyAlertListResponseDto {
+  total: number
+  page: number
+  limit: number
+  items: AlertResponseDto[]
+}
+
 /* ── EN enum → 한글 라벨 ── */
 export const ALERT_TYPE_LABEL: Record<AlertTypeEnum, string> = {
   TEMPERATURE_ANOMALY: '온도 이상',

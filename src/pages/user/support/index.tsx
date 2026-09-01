@@ -9,6 +9,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 
+import { SUPPORT_CONTACT } from "@/lib/support";
+
 /* ══════════════════════════════════════════════════════
    사용 가이드 데이터
    ══════════════════════════════════════════════════════ */
@@ -28,12 +30,7 @@ const guides = [
    기술 지원 담당자 데이터
    ══════════════════════════════════════════════════════ */
 
-const supportContact = {
-  name: "김상기 실장",
-  phone: "1588-1234",
-  phoneHours: "평일 10:00 - 18:00",
-  email: "support@hearingloop.kr",
-};
+const supportContact = SUPPORT_CONTACT;
 
 /* ══════════════════════════════════════════════════════
    YouTube 썸네일 컴포넌트

@@ -5,6 +5,7 @@ import {
   MapPin,
   ChevronRight,
   Flame,
+  CheckCircle2,
   Bell,
   Wifi,
   PackageSearch,
@@ -13,7 +14,8 @@ import {
   Shield,
 } from 'lucide-react'
 
-import bannerImg from '@/assets/banner-illustration.png'
+import { DashboardBanner, BannerButton } from '@/components/dashboard/DashboardBanner'
+import { kstBannerDate, formatKstTime, toMs } from '@/lib/kst'
 import { useDevices } from '@/hooks/useDevices'
 import { useZones } from '@/hooks/useZones'
 import { useAlerts, useAlertThresholds } from '@/hooks/useAlerts'
@@ -35,6 +37,7 @@ import {
   WIFI_AXIS_MAX,
   WIFI_THRESHOLDS,
   type OverheatDevice,
+  overheatDayBuckets,
 } from '@/lib/dashboard'
 import { formatDateTime } from '@/lib/format'
 
@@ -129,6 +132,10 @@ export default function AdminDashboard() {
     () => buildOverheatSummary(overheatQ.alerts, devices, nowMs),
     [overheatQ.alerts, devices, nowMs],
   )
+  const overheatDays = useMemo(
+    () => overheatDayBuckets(overheatQ.alerts, nowMs),
+    [overheatQ.alerts, nowMs],
+  )
   const zoneRows = useMemo(
     () => buildZoneRows(zones, devices, overheat, nowMs),
     [zones, devices, overheat, nowMs],
@@ -153,35 +160,47 @@ export default function AdminDashboard() {
     if (d) setSelectedDevice(d)
   }
 
+  /** 배너 eyebrow — 기기들이 마지막으로 보고한 시각 중 최신 */
+  const lastSeenLabel = useMemo(() => {
+    const times = devices.map((d) => (d.lastUpdated ? toMs(d.lastUpdated) : 0)).filter((t) => t > 0)
+    return times.length ? formatKstTime(Math.max(...times)) : '—'
+  }, [devices])
+
   const hotNow = overheat.currentDevices.length
   const watchHours = thresholds?.connection_lost_hours ?? 4
 
   return (
     <div className="space-y-6">
 
-      {/* ─── Welcome Banner ─── */}
-      <section
-        className="relative overflow-hidden rounded-2xl px-5 py-6 sm:px-10 sm:py-[1.875rem]"
-        style={{ background: 'color-mix(in srgb, #246BD1 20%, transparent)', minHeight: '11.75rem' }}
-      >
-        <div className="relative z-10 max-w-xl">
-          <h2 className="text-[clamp(1.375rem,1.1rem+0.8vw,1.625rem)] font-bold text-[#1E293B] mb-2">
-            환영합니다, 관리자님!
-          </h2>
-          <p className="text-[clamp(0.8125rem,0.75rem+0.25vw,0.875rem)] text-[#475569] leading-[1.7] max-w-[26rem]">
+      {/* ─── Welcome Banner (v2) ─── */}
+      <DashboardBanner
+        eyebrow={`${kstBannerDate(nowMs)} · 마지막 수신 ${lastSeenLabel}`}
+        title="환영합니다, 관리자님"
+        description={
+          <>
             전체 <b className="font-bold">{summary.total}대</b> 중{' '}
-            <b className="font-bold">{summary.online}대</b>가 정상 가동 중입니다.
-            <br />
-            미처리 알림 <b className="font-bold">{alertStats?.pending ?? 0}건</b>
-            {summary.buckets.fault > 0 && (
-              <> · 24시간 이상 미연결 <b className="font-bold text-destructive">{summary.buckets.fault}대</b></>
-            )}
-          </p>
-        </div>
-        <div className="absolute right-6 bottom-0 hidden sm:flex items-end" style={{ width: 'clamp(14rem, 25vw, 18rem)' }}>
-          <img src={bannerImg} alt="히어링 루프 모니터링 일러스트" className="w-full h-auto" />
-        </div>
-      </section>
+            <b className="font-bold text-[#0E9F6E]">{summary.online}대</b>가 가동 중이며, 조치가 필요한 기기가{' '}
+            <b className="font-bold text-destructive">{summary.buckets.watch + summary.buckets.fault}대</b> 있습니다.
+          </>
+        }
+        actions={
+          <>
+            <BannerButton onClick={() => navigate('/admin/hearing-loops')}>
+              장애 기기 보기 <ArrowRight className="h-3.5 w-3.5" />
+            </BannerButton>
+            <BannerButton variant="outline" onClick={() => navigate('/admin/alerts')}>
+              알림센터 열기
+            </BannerButton>
+          </>
+        }
+        stats={[
+          { label: 'DEVICES', value: summary.total },
+          { label: 'ONLINE', value: summary.online, tone: 'success' },
+          { label: 'FAULT', value: summary.buckets.fault, tone: 'danger' },
+          { label: 'ALERTS', value: alertStats?.pending ?? 0, tone: 'primary' },
+        ]}
+        tickerRight={`SEONGDONG-GU · KST ${formatKstTime(nowMs)}`}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_400px] items-start">
 
@@ -373,53 +392,81 @@ export default function AdminDashboard() {
         {/* ══ Right column ══ */}
         <div className="flex flex-col gap-6 min-w-0">
 
-          {/* ③ 과열 — 현재 > 24시간 > 7일 위계 */}
-          <CardShell
-            icon={<Flame className="h-4 w-4" />}
-            iconCls={hotNow ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}
-            title="과열"
-            accent={hotNow > 0}
-            action={
-              hotNow > 0 ? (
-                <span className="shrink-0 rounded-full bg-destructive/10 px-2.5 py-1 text-[11px] font-bold text-destructive">발생 중</span>
-              ) : (
-                <span className="shrink-0 text-[11px] text-muted-foreground">지금 상태</span>
-              )
-            }
-          >
-            <div className="px-5 py-5">
-              {/* 현재 — 가장 큰 층위 */}
-              <div className="flex items-baseline gap-2.5">
-                <span className={`text-[40px] font-bold leading-none ${hotNow ? 'text-destructive' : 'text-muted-foreground/70'}`}>
-                  {hotNow}
-                </span>
-                <span className={`text-[13px] ${hotNow ? 'text-destructive' : 'text-muted-foreground'}`}>대 과열 중</span>
+          {/* ③ 과열 — v2 다크 카드. 현재 > 7일 누적 > 요일 바 > 기기 위계 */}
+          <div className="overflow-hidden rounded-2xl bg-[#26266B] text-white shadow-sm">
+            {/* v2 질감 — 28px 그리드 + 하단 대각선 면 */}
+            <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: 'repeating-linear-gradient(0deg,rgba(255,255,255,0.03) 0 1px,transparent 1px 28px),repeating-linear-gradient(90deg,rgba(255,255,255,0.03) 0 1px,transparent 1px 28px)' }} />
+            <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%] bg-white/5" style={{ clipPath: 'polygon(0 30%,100% 0,100% 100%,0 100%)' }} />
+            <div className="relative flex items-center gap-2 border-b border-white/12 px-5 py-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
+                <Flame className={`h-4 w-4 ${hotNow ? 'text-red-300' : 'text-white/80'}`} />
               </div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                가동 중인 {summary.online}대 기준 · 오프라인 기기의 마지막 값은 제외
-              </p>
+              <h3 className="text-[15px] font-bold">과열</h3>
+              {hotNow > 0 ? (
+                <span className="ml-auto flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] font-bold text-red-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-400" />발생 중
+                </span>
+              ) : (
+                <span className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />정상
+                </span>
+              )}
+            </div>
 
-              {/* 이력 — 보조 층위 */}
-              <div className="mt-4 flex gap-3 border-t border-border pt-4">
-                <div className="flex-1">
-                  <p className="text-[11px] text-muted-foreground">최근 24시간</p>
-                  <p className="mt-1 text-[17px] font-bold leading-none text-foreground">
-                    {overheatQ.isLoading ? '—' : overheat.recent.length}
-                    <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">대</span>
-                  </p>
+            <div className="relative px-5 pb-5">
+              {/* 현재 상태 박스 + 7일 누적 */}
+              <div className={`mt-4 flex items-center gap-3 rounded-xl border px-4 py-3.5 ${hotNow ? 'border-red-400/25 bg-red-500/15' : 'border-emerald-400/25 bg-emerald-400/10'}`}>
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${hotNow ? 'bg-red-500/25' : 'bg-emerald-400/20'}`}>
+                  {hotNow > 0 ? <Flame className="h-4 w-4 text-red-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
                 </div>
-                <div className="flex-1 border-l border-border pl-3">
-                  <p className="text-[11px] text-muted-foreground">최근 7일</p>
-                  <p className={`mt-1 text-[17px] font-bold leading-none ${overheat.window.length ? 'text-warning' : 'text-foreground'}`}>
-                    {overheatQ.isLoading ? '—' : overheat.window.length}
-                    <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">대</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-bold">{hotNow > 0 ? `지금 ${hotNow}대 과열 중` : '과열 중인 기기 없음'}</p>
+                  <p className="text-[11px] text-white/50">가동 중인 {summary.online}대 기준 · 오프라인 기기의 마지막 값은 제외</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className={`text-[28px] font-bold leading-none tabular-nums ${overheat.totalEvents > 0 ? 'text-red-300' : 'text-emerald-300'}`}>
+                    {overheatQ.isLoading ? '—' : overheat.totalEvents}
                   </p>
+                  <p className="mt-1 text-[10px] text-white/50">7일 누적</p>
+                </div>
+              </div>
+
+              {/* 요일 미니 바 */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-[11px] text-white/50">
+                  <span>최근 7일 과열 기록</span>
+                  <span className={`font-bold ${overheat.totalEvents > 0 ? 'text-red-300' : 'text-[#5EEAD4]'}`}>
+                    {overheatQ.isLoading ? '—' : `${overheat.window.length ? `${overheat.window.length}대 · 약 ` : ''}${overheat.totalEvents}건`}
+                  </span>
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  {overheatDays.map((d, i) => (
+                    <div key={i} className="flex-1">
+                      <div
+                        title={`${d.label} ${d.count}건`}
+                        className={`relative h-[22px] overflow-hidden rounded-md ${
+                          d.count >= 5
+                            ? 'bg-red-500/80'
+                            : d.count > 0
+                              ? 'bg-red-400/50'
+                              : d.isToday
+                                ? 'bg-[rgba(52,211,153,0.28)] shadow-[inset_0_0_0_1.5px_#34D399]'
+                                : 'bg-[rgba(52,211,153,0.18)]'
+                        } ${d.isToday && d.count > 0 ? 'shadow-[inset_0_0_0_1.5px_#34D399]' : ''}`}
+                      >
+                        {d.isToday && (
+                          <span aria-hidden className="hl-sweep absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                        )}
+                      </div>
+                      <p className={`mt-1 text-center text-[10px] ${d.isToday ? 'font-bold text-[#5EEAD4]' : 'text-white/40'}`}>{d.label}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               {/* 기기 — 현재 과열 우선, 없으면 7일 내 최근 */}
               {overheatQ.isLoading ? (
-                <div className="mt-3 flex items-center gap-2 text-[12px] text-muted-foreground">
+                <div className="mt-3 flex items-center gap-2 text-[12px] text-white/60">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />이력 확인 중…
                 </div>
               ) : hotNow > 0 ? (
@@ -428,10 +475,10 @@ export default function AdminDashboard() {
                     <button
                       key={d.mac}
                       onClick={() => setSelectedDevice(d)}
-                      className="flex w-full items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-left transition-colors hover:bg-destructive/15"
+                      className="flex w-full items-center gap-2 rounded-xl bg-red-500/20 px-3 py-2 text-left transition-colors hover:bg-red-500/30"
                     >
-                      <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-destructive">{d.alias || d.mac}</span>
-                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-red-200">{d.alias || d.mac}</span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-red-300" />
                     </button>
                   ))}
                 </div>
@@ -441,26 +488,22 @@ export default function AdminDashboard() {
                     <button
                       key={o.mac}
                       onClick={() => openByMac(o.mac)}
-                      className="flex w-full items-center gap-2 rounded-xl bg-warning/10 px-3 py-2 text-left transition-colors hover:bg-warning/15"
+                      className="flex w-full items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-left transition-colors hover:bg-white/15"
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12px] font-bold text-warning">{o.label}</span>
-                        <span className="block text-[11px] text-warning/70">약 {o.count}회 · {formatDateTime(o.lastAt)}</span>
+                        <span className="block truncate text-[12px] font-bold text-amber-300">{o.label}</span>
+                        <span className="block text-[11px] text-white/50">약 {o.count}회 · {formatDateTime(o.lastAt)}</span>
                       </span>
-                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-warning" />
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-amber-300" />
                     </button>
                   ))}
                 </div>
-              ) : (
-                <p className="mt-3 rounded-xl bg-page px-3 py-2.5 text-[12px] text-muted-foreground">
-                  최근 7일간 과열 기록이 없습니다.
-                </p>
-              )}
+              ) : null}
               {overheatQ.truncated && (
-                <p className="mt-2 text-[11px] text-warning">조회 상한에 걸려 일부가 빠졌습니다 — 표시된 대수는 하한입니다.</p>
+                <p className="mt-2 text-[11px] text-amber-300">조회 상한에 걸려 일부가 빠졌습니다 — 표시된 대수는 하한입니다.</p>
               )}
             </div>
-          </CardShell>
+          </div>
 
           {/* ④ 알림 요약 */}
           <CardShell

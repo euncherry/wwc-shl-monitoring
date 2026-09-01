@@ -74,3 +74,11 @@ export function formatDuration(ms: number): string {
   const hour = Math.floor(min / 60)
   return min % 60 ? `${hour}시간 ${min % 60}분` : `${hour}시간`
 }
+
+/** 배너용 — "8월 13일 수요일" (KST 고정) */
+export function kstBannerDate(ms: number): string {
+  const { month, day } = kstParts(ms)
+  const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토']
+  const w = WEEKDAY[new Date(ms + KST_OFFSET_MS).getUTCDay()]
+  return `${month}월 ${day}일 ${w}요일`
+}

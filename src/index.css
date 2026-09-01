@@ -84,3 +84,19 @@
     background-color: var(--color-muted-foreground);
   }
 }
+
+/* v2 과열 카드 — '오늘' 칸 하이라이트 스윕 */
+@keyframes hl-sweep {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(260%); }
+  100% { transform: translateX(260%); }
+}
+.hl-sweep { animation: hl-sweep 3.2s ease-in-out infinite; }
+
+/* v2 배너 — 파문(ripple) 링 */
+@keyframes hl-ripple {
+  0%   { transform: scale(0.55); opacity: .55; }
+  70%  { opacity: .18; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+.hl-ripple { animation: hl-ripple 4.5s linear infinite; }

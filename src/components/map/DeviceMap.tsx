@@ -30,6 +30,34 @@ function markerKind(status: ConnectionStatus): 'online' | 'offline' {
   return status === 'OFFLINE' ? 'offline' : 'online'
 }
 
+/** 마커 아이콘·인포윈도우 문구를 정하는 표시 규격 */
+export interface MapStatusDisplay {
+  /** 사용할 핀 아이콘 */
+  kind: 'online' | 'offline'
+  /** 인포윈도우에 쓸 상태 라벨 */
+  label: string
+  /** 라벨·점 색 (hex) */
+  color: string
+}
+
+export type MapStatusResolver = (device: HearingLoop) => MapStatusDisplay
+
+/** 기본 규격(관리자) — connection_status 원값 그대로. 실시간 상태를 숨기지 않는다.
+ *  (export하지 않는다 — react-refresh 규칙상 컴포넌트 파일은 컴포넌트만 내보낸다) */
+const realtimeMapStatus: MapStatusResolver = (device) => {
+  const conn = connectionMeta(device.connectionStatus)
+  return {
+    kind: markerKind(device.connectionStatus),
+    label: conn.label,
+    color:
+      device.connectionStatus === 'OFFLINE'
+        ? '#64748b'
+        : device.connectionStatus === 'UPDATING'
+          ? '#246BD1'
+          : '#10b981',
+  }
+}
+
 /** HTML 이스케이프 — 별칭·MAC은 사용자 입력이라 오버레이 HTML에 넣기 전 처리 */
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -44,13 +72,12 @@ function esc(s: string): string {
  */
 function buildInfoWindow(
   device: HearingLoop,
+  display: MapStatusDisplay,
   handlers: { onDetail: () => void; onClose: () => void },
 ): HTMLElement {
   const hasAlias = Boolean(device.alias?.trim())
   const title = hasAlias ? device.alias!.trim() : device.mac
-  const conn = connectionMeta(device.connectionStatus)
-  const isOffline = device.connectionStatus === 'OFFLINE'
-  const dotColor = isOffline ? '#64748b' : device.connectionStatus === 'UPDATING' ? '#246BD1' : '#10b981'
+  const dotColor = display.color
   const routeUrl = `https://map.kakao.com/link/to/${encodeURIComponent(title)},${device.latitude},${device.longitude}`
 
   const el = document.createElement('div')
@@ -68,7 +95,7 @@ function buildInfoWindow(
     <div style="display:flex;align-items:center;gap:6px;padding-right:20px">
       <span style="font-size:13px;font-weight:800;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</span>
       <span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;font-size:11px;font-weight:700;color:${dotColor}">
-        <span style="width:6px;height:6px;border-radius:9999px;background:${dotColor}"></span>${esc(conn.label)}
+        <span style="width:6px;height:6px;border-radius:9999px;background:${dotColor}"></span>${esc(display.label)}
       </span>
     </div>
     ${hasAlias ? `<p style="margin:3px 0 0;font-size:11px;color:#64748b;font-family:ui-monospace,monospace">${esc(device.mac)}</p>` : ''}
@@ -92,9 +119,26 @@ interface Props {
   onSelect: (device: HearingLoop) => void
   /** 컨테이너 높이 클래스 (기본 h-[560px]) */
   heightClass?: string
+  /** 루트에 덧붙일 클래스 — 부모 높이에 맞춰 늘어나야 할 때 flex 유틸을 넘긴다 */
+  className?: string
+  /** 마커·인포윈도우 표시 규격. 기본은 실시간(connection_status) —
+   *  사용자 페이지는 소프트오프 정책 규격을 넘겨야 같은 화면의 KPI와 숫자가 맞는다. */
+  statusOf?: MapStatusResolver
+  /** 범례 문구 (기본: 정상 작동 / 작동 중지) */
+  legend?: { online: string; offline: string }
+  /** 좌표가 하나도 없을 때의 안내 문구 */
+  emptyHint?: string
 }
 
-export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Props) {
+export function DeviceMap({
+  devices,
+  onSelect,
+  heightClass = 'h-[560px]',
+  className = '',
+  statusOf = realtimeMapStatus,
+  legend = { online: '정상 작동', offline: '작동 중지' },
+  emptyHint = '좌표가 등록된 기기가 없습니다 — 기기 상세에서 설치 좌표를 입력하세요',
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null)
@@ -136,6 +180,16 @@ export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Prop
     return () => { cancelled = true }
   }, [])
 
+  /* 컨테이너 크기가 바뀌면(부모 flex에 따라 높이가 늘고 줌) 카카오맵에 재계산을 알린다.
+     알리지 않으면 지도가 생성 시점 크기로 남아 회색 여백이 생긴다. */
+  useEffect(() => {
+    const el = containerRef.current
+    if (status !== 'ready' || !el) return
+    const ro = new ResizeObserver(() => mapRef.current?.relayout())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [status])
+
   /* 기기 목록 변경 시 마커 재구성 */
   useEffect(() => {
     const map = mapRef.current
@@ -157,7 +211,8 @@ export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Prop
     const bounds = new kakao.maps.LatLngBounds()
     for (const device of located) {
       const pos = new kakao.maps.LatLng(device.latitude, device.longitude)
-      const kind = markerKind(device.connectionStatus)
+      const display = statusOf(device)
+      const kind = display.kind
       const marker = new kakao.maps.Marker({
         map,
         position: pos,
@@ -173,7 +228,7 @@ export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Prop
       // 마커 클릭 → 인포윈도우 (한 번에 하나만 열림)
       const infoWindow = new kakao.maps.CustomOverlay({
         position: pos,
-        content: buildInfoWindow(device, {
+        content: buildInfoWindow(device, display, {
           onDetail: () => { closeInfo(); onSelect(device) },
           onClose: closeInfo,
         }),
@@ -194,15 +249,15 @@ export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Prop
     // 마커 1개면 setBounds가 과확대 → 적정 레벨로 완화
     if (located.length === 1 && map.getLevel() < 4) map.setLevel(4)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, devices, onSelect])
+  }, [status, devices, onSelect, statusOf])
 
   return (
-    <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+    <div className={`overflow-hidden rounded-2xl border border-border bg-white shadow-sm ${className}`}>
       {/* 헤더: 범례 + 집계 */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
         <div className="flex flex-wrap items-center gap-4 text-[11px] font-semibold text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5"><img src={MARKER_SRC.online} alt="" className="h-5 w-auto" /> 정상 작동</span>
-          <span className="inline-flex items-center gap-1.5"><img src={MARKER_SRC.offline} alt="" className="h-5 w-auto" /> 작동 중지</span>
+          <span className="inline-flex items-center gap-1.5"><img src={MARKER_SRC.online} alt="" className="h-5 w-auto" /> {legend.online}</span>
+          <span className="inline-flex items-center gap-1.5"><img src={MARKER_SRC.offline} alt="" className="h-5 w-auto" /> {legend.offline}</span>
         </div>
         <span className="text-[12px] text-muted-foreground">
           지도 표시 <span className="font-bold text-foreground">{located.length}</span>대
@@ -229,7 +284,7 @@ export function DeviceMap({ devices, onSelect, heightClass = 'h-[560px]' }: Prop
         {status === 'ready' && located.length === 0 && (
           <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
             <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-white/95 px-3 py-1.5 text-[12px] font-semibold text-muted-foreground shadow-sm">
-              <MapPin className="h-3.5 w-3.5" /> 좌표가 등록된 기기가 없습니다 — 기기 상세에서 설치 좌표를 입력하세요
+              <MapPin className="h-3.5 w-3.5" /> {emptyHint}
             </span>
           </div>
         )}

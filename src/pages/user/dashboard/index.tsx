@@ -1,474 +1,685 @@
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Radio,
-  Power,
-  AlertTriangle,
   Bell,
-  Clock,
   CheckCircle,
+  ChevronRight,
+  Phone,
+  Mail,
+  LifeBuoy,
+  Loader2,
+  AlertCircle,
+  MapPin,
+  Flame,
   Wifi,
-  WifiOff,
-} from "lucide-react";
+} from 'lucide-react'
 
-import bannerImg from "@/assets/banner-illustration.png";
+import { DashboardBanner, BannerButton } from '@/components/dashboard/DashboardBanner'
+import { BrandPanel } from '@/components/dashboard/BrandPanel'
+import { useDevices } from '@/hooks/useDevices'
+import { useMyAlerts } from '@/hooks/useAlerts'
+import { useAuthStore } from '@/stores/authStore'
+import { summarizeUserDevices, summarizeMyAlerts, userMapStatus } from '@/lib/userDashboard'
+import { DeviceMap } from '@/components/map/DeviceMap'
+import { displayTitle, userChipProps, type ChipProps, type Tone } from '@/components/device/UserDeviceCard'
+import { ALERT_PRIORITY_LABEL, ALERT_TYPE_LABEL, type AlertPriorityEnum } from '@/types/alert'
+import { formatKst, formatKstTime, kstDayStartMs, toMs, kstBannerDate } from '@/lib/kst'
+import {
+  overheatDayBuckets,
+  summarizeWifi,
+  stackDots,
+  wifiAxisPos,
+  WIFI_AXIS_MIN,
+  WIFI_AXIS_MAX,
+  WIFI_THRESHOLDS,
+} from '@/lib/dashboard'
+import { deriveUserStatus } from '@/lib/userDeviceDisplay'
+import type { HearingLoop } from '@/types/device'
+import { SUPPORT_CONTACT } from '@/lib/support'
 
 /* ══════════════════════════════════════════════════════
-   Mock data — 사용자 기관 데이터
+   사용자 대시보드 — 관리자 대시보드와 같은 레이아웃 골격을 쓴다.
+   배너 → grid[1fr_400px] · 좌(지도·Wi-Fi·지원) / 우(확인 필요·과열·알림·브랜드)
+   지도 위에 KPI 카드를 따로 얹지 않고, 관리자처럼 헤더 칩 스트립으로 요약한다.
+
+   데이터: GET /devices(소속 기기 자동 필터) + GET /alerts/my(전달된 알림만).
+   상태·비율 판정은 전부 lib/userDashboard → userDeviceDisplay 정책을 따른다.
    ══════════════════════════════════════════════════════ */
 
-const myZone = {
-  zoneName: "서울시청",
-  totalDevices: 4,
-  activeDevices: 4,
-  offlineDevices: 0,
-  warningDevices: 0,
-};
+const PRIORITY_STYLE: Record<AlertPriorityEnum, { box: string; dot: string; text: string }> = {
+  CRITICAL: { box: 'bg-destructive/5 border-destructive/15', dot: 'bg-destructive', text: 'text-destructive' },
+  WARNING: { box: 'bg-warning/5 border-warning/15', dot: 'bg-warning', text: 'text-warning' },
+  INFO: { box: 'bg-primary/5 border-primary/15', dot: 'bg-primary', text: 'text-primary' },
+}
 
-const todayAlerts: {
-  id: string;
-  type: string;
-  level: "critical" | "warning" | "info";
-  message: string;
-  time: string;
-  device: string;
-}[] = [
-  {
-    id: "a1",
-    type: "온도 주의",
-    level: "warning",
-    message: "HL-0042 온도 43°C 감지 (임계값 근접)",
-    time: "14:22",
-    device: "HL-0042",
-  },
-  {
-    id: "a2",
-    type: "펌웨어 알림",
-    level: "info",
-    message: "HL-0041 펌웨어 업데이트 가능 (v2.5.0)",
-    time: "09:15",
-    device: "HL-0041",
-  },
-];
+/** 기기 요약 아이콘 색 — 기기 카드 칩(TONE)에서 배경을 뺀 글자색만 */
+const ICON_TONE: Record<Tone, string> = {
+  success: 'text-success',
+  warning: 'text-warning',
+  destructive: 'text-destructive',
+  muted: 'text-muted-foreground',
+  info: 'text-primary',
+}
 
-const deviceList = [
-  {
-    id: "HL-0041",
-    nickname: "1층 민원 안내데스크",
-    status: "normal" as const,
-    power: true,
-    network: true,
-    temp: 36,
-    firmware: "v2.4.1",
-  },
-  {
-    id: "HL-0042",
-    nickname: "2층 민원 상담실",
-    status: "normal" as const,
-    power: true,
-    network: true,
-    temp: 43,
-    firmware: "v2.5.0",
-  },
-  {
-    id: "HL-0043",
-    nickname: "3층 대회의실",
-    status: "normal" as const,
-    power: true,
-    network: true,
-    temp: 35,
-    firmware: "v2.5.0",
-  },
-  {
-    id: "HL-0044",
-    nickname: "",
-    status: "normal" as const,
-    power: true,
-    network: true,
-    temp: 34,
-    firmware: "v2.5.0",
-  },
-];
+/** 기기 요약 정렬용 — WiFi 칩 색이 좋은 순 */
+const WIFI_RANK: Record<Tone, number> = { success: 0, info: 1, warning: 2, muted: 3, destructive: 4 }
 
-const lastAlertTime = "2025-01-20 14:22";
+/* ── 조각 컴포넌트 — 관리자 대시보드와 같은 규격 ────────── */
+
+function StatChip({
+  label,
+  value,
+  tone = 'muted',
+}: {
+  label: string
+  value: number | string
+  tone?: 'muted' | 'success' | 'warning' | 'danger'
+}) {
+  const cls = {
+    muted: 'text-muted-foreground',
+    success: 'text-success',
+    warning: 'text-warning',
+    danger: 'text-destructive',
+  }[tone]
+  return (
+    <span className="flex items-center gap-1 whitespace-nowrap text-[12px] text-muted-foreground">
+      {label}
+      <b className={`font-bold tabular-nums ${cls}`}>{value}</b>
+    </span>
+  )
+}
+
+function LinkButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary transition-colors hover:text-primary-dark"
+    >
+      {label}
+      <ChevronRight className="h-3.5 w-3.5" />
+    </button>
+  )
+}
+
+/** 카드 껍데기 — 관리자 CardShell과 같은 형태(헤더 + 본문) */
+function CardShell({
+  icon,
+  iconCls = 'bg-primary/10 text-primary',
+  title,
+  action,
+  children,
+}: {
+  icon: React.ReactNode
+  iconCls?: string
+  title: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+      <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
+        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconCls}`}>{icon}</div>
+        <h3 className="text-[15px] font-bold text-foreground">{title}</h3>
+        {action && <div className="ml-auto">{action}</div>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/** 상태 칩을 아이콘 하나로 압축한 것 — 값은 title/aria-label로만 읽힌다.
+ *  기기 카드(userChipProps)와 같은 톤 규격을 쓰므로 목록↔카드 사이에 색이 어긋나지 않는다. */
+function IconStat({ chip }: { chip: ChipProps }) {
+  return (
+    <span
+      title={`${chip.label} · ${chip.value}`}
+      aria-label={`${chip.label} ${chip.value}`}
+      className={`flex w-7 shrink-0 justify-center ${ICON_TONE[chip.tone]}`}
+    >
+      {chip.icon}
+    </span>
+  )
+}
+
+/** 기기 요약 한 줄 — 기기명 + 동작·WiFi 아이콘 둘.
+ *  구분선 방식은 Wi-Fi 신호 목록과 같은 규격으로 맞췄다. */
+function DeviceSummaryRow({ device, onClick }: { device: HearingLoop; onClick: () => void }) {
+  const chips = userChipProps(device)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2 border-b border-border/60 px-5 py-3 text-left transition-colors last:border-b-0 hover:bg-page"
+    >
+      <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-foreground">
+        {displayTitle(device)}
+      </span>
+      <IconStat chip={chips.operation} />
+      <IconStat chip={chips.wifi} />
+    </button>
+  )
+}
 
 /* ══════════════════════════════════════════════════════
-   Component
+   Dashboard
    ══════════════════════════════════════════════════════ */
 
 export default function UserDashboard() {
-  const operatingRate =
-    myZone.totalDevices > 0
-      ? Math.round((myZone.activeDevices / myZone.totalDevices) * 100)
-      : 0;
-  const allNormal = myZone.offlineDevices === 0 && myZone.warningDevices === 0;
-  const hasCriticalToday = todayAlerts.some((a) => a.level === "critical");
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+
+  const { data: devices = [], isLoading, isError } = useDevices()
+  /* 전달된 알림은 드물어 페이지 하나면 충분하다. '오늘 N건'은 이 페이지 안에서만 센다(응답에 통계 없음). */
+  const alertsQ = useMyAlerts({ limit: 50 })
+  /* 과열 요일 바 — 전달받은 과열 알림으로 7일 창을 그린다. limit 100은 백엔드 하드캡. */
+  const overheatQ = useMyAlerts({ type: 'TEMPERATURE_ANOMALY', limit: 100 })
+
+  // 렌더마다 흔들리지 않도록 마운트 시점으로 고정 (관리자 대시보드와 동일)
+  const [nowMs] = useState(() => Date.now())
+  const summary = useMemo(() => summarizeUserDevices(devices), [devices])
+  const alerts = useMemo(() => summarizeMyAlerts(alertsQ.data?.items ?? [], nowMs), [alertsQ.data, nowMs])
+  const overheatDays = useMemo(
+    () => overheatDayBuckets(overheatQ.data?.items ?? [], nowMs),
+    [overheatQ.data, nowMs],
+  )
+  const overheatWeekTotal = useMemo(() => overheatDays.reduce((n, d) => n + d.count, 0), [overheatDays])
+  const wifi = useMemo(() => summarizeWifi(devices), [devices])
+  const wifiPlotted = useMemo(() => {
+    const withRssi = devices
+      .filter((d) => d.connectionStatus !== 'OFFLINE' && d.wifiRssi != null)
+      .sort((a, b) => (a.wifiRssi ?? 0) - (b.wifiRssi ?? 0))
+    return stackDots(withRssi, (d) => d.wifiRssi ?? 0)
+  }, [devices])
+  /* 신호 강한 순. RSSI가 없는 기기는 방향과 무관하게 늘 맨 아래로 보낸다
+     (0으로 두면 내림차순에서 '가장 강함'으로 올라온다). */
+  const sortedByRssi = useMemo(
+    () =>
+      devices
+        .filter((d) => d.connectionStatus !== 'OFFLINE')
+        .sort((a, b) => (b.wifiRssi ?? -Infinity) - (a.wifiRssi ?? -Infinity)),
+    [devices],
+  )
+
+  /** 배너 eyebrow — 소속 기기 중 마지막 보고 시각 */
+  const lastSeenLabel = useMemo(() => {
+    const times = devices.map((d) => (d.lastUpdated ? toMs(d.lastUpdated) : 0)).filter((t) => t > 0)
+    return times.length ? formatKstTime(Math.max(...times)) : '—'
+  }, [devices])
+
+  /* 기기 요약 카드에 올릴 목록 — 정상 동작 중인 것만 4대. 전수 확인이 아니라 '잘 돌고 있다'는 표본이라 짧게 끊는다.
+     같은 '정상' 안에서도 WiFi가 온전한 기기를 앞에 세운다(소등 4h 경과분은 WiFi가 회색 '끊김'으로 뜬다). */
+  const healthy = useMemo(
+    () =>
+      devices
+        .filter((d) => deriveUserStatus(d) === 'normal')
+        .map((d) => ({ d, rank: WIFI_RANK[userChipProps(d).wifi.tone] }))
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, 4)
+        .map((x) => x.d),
+    [devices],
+  )
+
+  const zoneName = user?.zoneName ?? devices[0]?.telecoilZoneName ?? '우리 기관'
+  const goDevices = () => navigate('/user/hearing-loops')
 
   return (
     <div className="space-y-6">
-      {/* ─── Welcome Banner ─── */}
-      <section
-        className="relative overflow-hidden rounded-2xl"
-        style={{
-          background: "color-mix(in srgb, #246BD1 20%, transparent)",
-          minHeight: "11.75rem",
-          padding: "1.875rem 2.5rem",
-        }}
-      >
-        <div className="relative z-10 max-w-xl">
-          <h2 className="text-[clamp(1.375rem,1.1rem+0.8vw,1.625rem)] font-bold text-[#1E293B] mb-2">
-            안녕하세요, {myZone.zoneName} 담당자님!
-          </h2>
-          <p className="text-[clamp(0.8125rem,0.75rem+0.25vw,0.875rem)] text-[#475569] leading-[1.7] max-w-[26rem]">
-            {myZone.zoneName}에 설치된 {myZone.totalDevices}개의 히어링루프 중{" "}
-            {myZone.activeDevices}개가 정상 작동 중입니다.
-            {todayAlerts.length > 0 && (
+      {/* ─── Welcome Banner (v2) ─── */}
+      <DashboardBanner
+        eyebrow={`${kstBannerDate(nowMs)} · 마지막 수신 ${lastSeenLabel}`}
+        title={`안녕하세요, ${user?.name ?? zoneName}님`}
+        description={
+          <>
+            {zoneName}에 설치된 <b className="font-bold">{summary.total}대</b> 중{' '}
+            <b className="font-bold text-[#0E9F6E]">{summary.normal}대</b>가 정상 동작 중입니다.
+            {summary.attention.length > 0 ? (
               <>
-                <br />
-                오늘 {todayAlerts.length}건의 알림이 발생했습니다.
+                {' '}확인이 필요한 기기가{' '}
+                <b className="font-bold text-destructive">{summary.attention.length}대</b> 있습니다.
               </>
+            ) : (
+              alerts.todayCount > 0 && (
+                <> 오늘 전달받은 알림이 <b className="font-bold">{alerts.todayCount}건</b> 있습니다.</>
+              )
             )}
+          </>
+        }
+        actions={
+          <>
+            <BannerButton onClick={goDevices}>
+              기기 상태 보기 <ChevronRight className="h-3.5 w-3.5" />
+            </BannerButton>
+            <BannerButton variant="outline" onClick={() => navigate('/user/support')}>
+              사용 가이드
+            </BannerButton>
+          </>
+        }
+        stats={[
+          { label: 'DEVICES', value: summary.total },
+          { label: 'NORMAL', value: summary.normal, tone: 'success' },
+          { label: 'OFFLINE', value: summary.disconnected, tone: 'danger' },
+          { label: 'ALERTS', value: alerts.todayCount, tone: 'primary' },
+        ]}
+        tickerRight={`${zoneName} · KST ${formatKstTime(nowMs)}`}
+      />
+
+      {isLoading ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-white py-20 shadow-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/40" />
+          <p className="text-[14px] font-semibold text-muted-foreground">불러오는 중…</p>
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-white py-20 shadow-sm">
+          <AlertCircle className="h-10 w-10 text-destructive/40" />
+          <p className="text-[14px] font-semibold text-destructive">기기 정보를 불러오지 못했습니다</p>
+        </div>
+      ) : summary.total === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-white py-20 shadow-sm">
+          <Radio className="h-10 w-10 text-muted-foreground/20" />
+          <p className="text-[14px] font-semibold text-muted-foreground">
+            소속 기관에 등록된 히어링루프가 없습니다
           </p>
+          <p className="text-[12px] text-muted-foreground">기기 등록은 관리자에게 문의해 주세요.</p>
         </div>
-        <div
-          className="absolute right-6 bottom-0 flex items-end"
-          style={{ width: "clamp(14rem, 25vw, 18rem)" }}
-        >
-          <img
-            src={bannerImg}
-            alt="히어링 루프 모니터링 일러스트"
-            className="w-full h-auto"
-          />
-        </div>
-      </section>
-
-      {/* ─── 기관 히어링루프 현황 (메인) ─── */}
-      <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-            <Radio className="h-4 w-4 text-primary" />
-          </div>
-          <h3 className="text-[15px] font-bold text-foreground">
-            우리 기관 히어링루프 현황
-          </h3>
-          <span className="ml-auto text-[12px] text-muted-foreground">
-            {myZone.zoneName}
-          </span>
-        </div>
-
-        <div className="p-6">
-          {/* KPI 상단 */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="rounded-xl border border-border p-4 text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Radio className="h-4 w-4 text-primary" />
-                <span className="text-[12px] text-muted-foreground">
-                  전체 장비
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[1fr_400px]">
+          {/* ══ Left column ══ */}
+          <div className="flex min-w-0 flex-col gap-6">
+            {/* ① 설치 지도 — 관리자 지도뷰와 같은 골격. KPI는 헤더 칩 스트립으로 */}
+            <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-6 py-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                    <MapPin className="h-4 w-4 text-primary" />
+                  </div>
+                  <h3 className="text-[15px] font-bold text-foreground">우리 기관 설치 지도</h3>
+                  <span className="text-[12px] text-muted-foreground">{zoneName}</span>
+                </div>
+                <LinkButton label="전체 기기 보기" onClick={goDevices} />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border bg-page/40 px-6 py-2.5">
+                <StatChip label="전체" value={summary.total} />
+                <StatChip label="정상" value={summary.normal} tone="success" />
+                <StatChip label="경고" value={summary.warning} tone="warning" />
+                <StatChip label="연결 끊김" value={summary.disconnected} tone="danger" />
+                <StatChip
+                  label="정상률"
+                  value={`${summary.normalPct}%`}
+                  tone={summary.normalPct === 100 ? 'success' : summary.normalPct >= 80 ? 'muted' : 'danger'}
+                />
+                <span className="ml-auto text-[11px] text-muted-foreground">
+                  24시간 미만 꺼짐은 정상으로 집계(일과 후 소등 포함)
                 </span>
               </div>
-              <p className="text-3xl font-bold text-foreground">
-                {myZone.totalDevices}
-              </p>
-            </div>
-            <div className="rounded-xl border border-success/20 bg-success/3 p-4 text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Power className="h-4 w-4 text-success" />
-                <span className="text-[12px] text-muted-foreground">
-                  정상 가동
-                </span>
-              </div>
-              <p className="text-3xl font-bold text-success">
-                {myZone.activeDevices}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border p-4 text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <WifiOff className="h-4 w-4 text-muted-foreground" />
-                <span className="text-[12px] text-muted-foreground">
-                  오프라인
-                </span>
-              </div>
-              <p
-                className={`text-3xl font-bold ${myZone.offlineDevices > 0 ? "text-destructive" : "text-muted-foreground/40"}`}
-              >
-                {myZone.offlineDevices}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border p-4 text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-warning" />
-                <span className="text-[12px] text-muted-foreground">경고</span>
-              </div>
-              <p
-                className={`text-3xl font-bold ${myZone.warningDevices > 0 ? "text-warning" : "text-muted-foreground/40"}`}
-              >
-                {myZone.warningDevices}
-              </p>
-            </div>
-          </div>
-
-          {/* 가동률 바 */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[13px] font-semibold text-foreground">
-                가동률
-              </span>
-              <span
-                className={`text-[15px] font-bold tabular-nums ${operatingRate === 100 ? "text-success" : operatingRate >= 80 ? "text-primary" : "text-destructive"}`}
-              >
-                {operatingRate}%
-              </span>
-            </div>
-            <div className="h-3 rounded-full bg-border/50 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${operatingRate === 100 ? "bg-success" : operatingRate >= 80 ? "bg-primary" : "bg-destructive"}`}
-                style={{ width: `${operatingRate}%` }}
+              <DeviceMap
+                devices={devices}
+                onSelect={goDevices}
+                statusOf={userMapStatus}
+                legend={{ online: '정상', offline: '연결 끊김' }}
+                emptyHint="설치 좌표가 등록된 기기가 없습니다 — 관리자에게 문의해 주세요"
+                className="flex min-h-0 flex-1 flex-col"
+                /* 우측 열 높이에 맞춰 늘거나 준다. 단일 열(xl 미만)에선 늘 자리가 없어 하한값이 곧 높이 */
+                heightClass="min-h-[420px] flex-1 xl:min-h-[320px]"
               />
             </div>
-          </div>
 
-          {/* 장비 리스트 */}
-          <div className="space-y-2">
-            <h4 className="text-[13px] font-semibold text-foreground mb-3">
-              장비별 상태
-            </h4>
-            {deviceList.map((d) => (
-              <div
-                key={d.id}
-                className="flex items-center gap-4 rounded-xl border border-border/50 px-4 py-3 hover:bg-page/30 transition-colors"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-                  <Radio className="h-4 w-4 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[13px] font-bold text-foreground">
-                      {d.nickname || d.id}
-                    </p>
-                    <span className="rounded bg-page px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                      {d.id}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 text-[12px]">
-                  <div className="flex items-center gap-1.5">
-                    {d.power ? (
-                      <Power className="h-3.5 w-3.5 text-success" />
-                    ) : (
-                      <Power className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                    <span className="text-muted-foreground">전원</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {d.network ? (
-                      <Wifi className="h-3.5 w-3.5 text-success" />
-                    ) : (
-                      <WifiOff className="h-3.5 w-3.5 text-destructive" />
-                    )}
-                    <span className="text-muted-foreground">네트워크</span>
-                  </div>
-                  {/* <div className="flex items-center gap-1.5">
-                    <span className={`font-bold ${d.temp > 45 ? 'text-destructive' : d.temp > 40 ? 'text-warning' : 'text-foreground'}`}>
-                      {d.temp}°C
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Shield className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className={`font-mono font-semibold ${d.firmware === 'v2.5.0' ? 'text-success' : 'text-warning'}`}>
-                      {d.firmware}
-                    </span>
-                  </div> */}
-                </div>
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold shrink-0 ${
-                    d.status === "normal"
-                      ? "bg-success/10 text-success"
-                      : d.status === "warning"
-                        ? "bg-warning/10 text-warning"
-                        : "bg-destructive/10 text-destructive"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      d.status === "normal"
-                        ? "bg-success"
-                        : d.status === "warning"
-                          ? "bg-warning"
-                          : "bg-destructive"
-                    }`}
-                  />
-                  {d.status === "normal"
-                    ? "정상"
-                    : d.status === "warning"
-                      ? "경고"
-                      : "오류"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ─── 하단 3열 그리드: 시스템 상태 / 오늘 알림 / 최근 알림 시간 ─── */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* 오늘 발생 알림 */}
-        <div className="rounded-2xl border border-border bg-white shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div
-              className={`flex h-9 w-9 items-center justify-center rounded-xl ${hasCriticalToday ? "bg-destructive/10" : "bg-primary/10"}`}
+            {/* ② Wi-Fi 신호 — 관리자 위젯과 같은 규격 */}
+            <CardShell
+              icon={<Wifi className="h-4 w-4" />}
+              iconCls={wifi.weak ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}
+              title="Wi-Fi 신호"
+              action={
+                <span className="shrink-0 text-[11px] text-muted-foreground">연결된 {wifi.connected}대 기준</span>
+              }
             >
-              <Bell
-                className={`h-5 w-5 ${hasCriticalToday ? "text-destructive" : "text-primary"}`}
-              />
-            </div>
-            <h3 className="text-[14px] font-bold text-foreground">
-              오늘 발생 알림
-            </h3>
-            <span
-              className={`ml-auto flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-[12px] font-bold ${
-                todayAlerts.length > 0
-                  ? "bg-warning/10 text-warning"
-                  : "bg-page text-muted-foreground"
-              }`}
-            >
-              {todayAlerts.length}
-            </span>
-          </div>
-          {todayAlerts.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-6">
-              <Bell className="h-7 w-7 text-muted-foreground/20" />
-              <p className="text-[13px] text-muted-foreground">
-                오늘 발생한 알림이 없습니다
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {todayAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`flex items-start gap-3 rounded-xl px-3 py-2.5 text-[12px] ${
-                    alert.level === "critical"
-                      ? "bg-destructive/5 border border-destructive/15"
-                      : alert.level === "warning"
-                        ? "bg-warning/5 border border-warning/15"
-                        : "bg-primary/5 border border-primary/15"
-                  }`}
-                >
-                  <span
-                    className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-                      alert.level === "critical"
-                        ? "bg-destructive"
-                        : alert.level === "warning"
-                          ? "bg-warning"
-                          : "bg-primary"
-                    }`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-foreground">
-                      {alert.type}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 truncate">
-                      {alert.message}
-                    </p>
-                  </div>
-                  <span className="text-muted-foreground shrink-0">
-                    {alert.time}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          {hasCriticalToday && (
-            <div className="flex items-center gap-1.5 mt-3 rounded-lg bg-destructive/5 px-3 py-2 text-[11px] font-semibold text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              긴급 알림이 포함되어 있습니다
-            </div>
-          )}
-        </div>
-
-        {/* 시스템 상태 메시지 */}
-        <div className="rounded-2xl border border-border bg-white shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div
-              className={`flex h-9 w-9 items-center justify-center rounded-xl ${allNormal ? "bg-success/10" : "bg-warning/10"}`}
-            >
-              {allNormal ? (
-                <CheckCircle className="h-5 w-5 text-success" />
+              {wifi.connected === 0 ? (
+                <p className="px-5 py-6 text-[12px] text-muted-foreground">연결된 기기가 없습니다.</p>
               ) : (
-                <AlertTriangle className="h-5 w-5 text-warning" />
-              )}
-            </div>
-            <h3 className="text-[14px] font-bold text-foreground">
-              시스템 상태
-            </h3>
-          </div>
-          <div
-            className={`rounded-xl p-4 ${allNormal ? "bg-success/5 border border-success/20" : "bg-warning/5 border border-warning/20"}`}
-          >
-            <p
-              className={`text-[14px] font-semibold ${allNormal ? "text-success" : "text-warning"}`}
-            >
-              {allNormal
-                ? "모든 히어링루프가 정상 동작 중입니다"
-                : "일부 장비에 주의가 필요합니다"}
-            </p>
-            <p className="text-[12px] text-muted-foreground mt-1">
-              {allNormal
-                ? `${myZone.totalDevices}대 모두 정상 가동 · 가동률 ${operatingRate}%`
-                : `${myZone.offlineDevices}대 오프라인 · ${myZone.warningDevices}대 경고`}
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 mt-4 text-[11px] text-muted-foreground">
-            <span
-              className={`h-2 w-2 rounded-full ${allNormal ? "bg-success" : "bg-warning"} animate-pulse`}
-            />
-            실시간 모니터링 중
-          </div>
-        </div>
+                <>
+                  {/* 분포 스트립 — 기기 하나 = 점 하나 */}
+                  <div className="px-5 pt-4">
+                    <div className="relative h-[62px] rounded-xl bg-page">
+                      {WIFI_THRESHOLDS.map((v) => (
+                        <span
+                          key={v}
+                          className="absolute inset-y-0 w-px bg-border-strong/70"
+                          style={{ left: `${wifiAxisPos(v) * 100}%` }}
+                        >
+                          <span className="absolute left-1 top-1 whitespace-nowrap text-[10px] text-muted-foreground">
+                            {v}
+                          </span>
+                        </span>
+                      ))}
+                      {wifiPlotted.map(({ item, level }) => (
+                        <button
+                          key={item.mac}
+                          onClick={goDevices}
+                          title={`${item.alias || item.mac} · ${item.wifiRssi}dBm`}
+                          aria-label={`${item.alias || item.mac} ${item.wifiRssi}dBm`}
+                          className="group absolute -mb-3 -ml-3 flex h-6 w-6 items-center justify-center"
+                          style={{
+                            left: `${wifiAxisPos(item.wifiRssi ?? 0) * 100}%`,
+                            bottom: `${6 + level * 9}px`,
+                          }}
+                        >
+                          <span
+                            className={`h-[9px] w-[9px] rounded-full ring-2 ring-page transition-transform group-hover:scale-150 ${
+                              item.wifiSignal === 'WEAK'
+                                ? 'bg-warning'
+                                : item.wifiSignal === 'FAIR'
+                                  ? 'bg-primary'
+                                  : 'bg-success'
+                            }`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>{WIFI_AXIS_MIN} dBm</span>
+                      <span>약할수록 왼쪽</span>
+                      <span>{WIFI_AXIS_MAX}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-success" />
+                        강함 <b className="font-bold tabular-nums text-foreground">{wifi.strong}</b>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-primary" />
+                        보통 <b className="font-bold tabular-nums text-foreground">{wifi.fair}</b>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-warning" />
+                        약함 <b className="font-bold tabular-nums text-warning">{wifi.weak}</b>
+                      </span>
+                    </div>
+                  </div>
 
-        {/* 최근 알림 시간 */}
-        <div className="rounded-2xl border border-border bg-white shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-              <Clock className="h-5 w-5 text-primary" />
-            </div>
-            <h3 className="text-[14px] font-bold text-foreground">
-              최근 알림 시간
-            </h3>
+                  {/* 표 뷰 — 전체를 강한 순으로 */}
+                  <div className="mt-3 border-t border-border">
+                    <div className="flex items-center justify-between px-5 py-2">
+                      <span className="text-[11px] text-muted-foreground">강한 순 · 전체 {wifi.connected}대</span>
+                      {wifi.weak > 0 && (
+                        <span className="text-[11px] text-muted-foreground">아래 {wifi.weak}대가 약함</span>
+                      )}
+                    </div>
+                    <div className="max-h-[128px] overflow-y-auto scrollbar-thin">
+                      {sortedByRssi.map((d) => (
+                        <button
+                          key={d.mac}
+                          onClick={goDevices}
+                          className="flex w-full items-center gap-2.5 px-5 py-1.5 text-left transition-colors hover:bg-page"
+                        >
+                          <span
+                            className={`h-2 w-2 shrink-0 rounded-full ${
+                              d.wifiSignal === 'WEAK'
+                                ? 'bg-warning'
+                                : d.wifiSignal === 'FAIR'
+                                  ? 'bg-primary'
+                                  : 'bg-success'
+                            }`}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">
+                            {d.alias || d.mac}
+                          </span>
+                          <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                            {d.wifiRssi != null ? `${d.wifiRssi} dBm` : '—'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardShell>
+
+            {/* ③ 도움이 필요하신가요 — Wi-Fi 아래. 좌측 열이 넓어 안내 문구 옆에 연락처 두 장을 나란히 둔다 */}
+            <CardShell
+              icon={<LifeBuoy className="h-4 w-4" />}
+              title="도움이 필요하신가요?"
+              action={<LinkButton label="사용 가이드 보기" onClick={() => navigate('/user/support')} />}
+            >
+              <div className="grid gap-3 p-5 lg:grid-cols-[minmax(0,1fr)_240px_240px] lg:items-center">
+                <div className="rounded-xl border border-border/50 bg-page/50 px-4 py-3 text-[12px] leading-[1.7] text-muted-foreground">
+                  기기에 <b className="font-semibold text-foreground">경고·연결 끊김</b>이 표시되면 전원과
+                  콘센트를 먼저 확인해 주세요. 그래도 해결되지 않으면 연락처로 문의해 주세요.
+                </div>
+                <a
+                  href={`tel:${SUPPORT_CONTACT.phone}`}
+                  className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:border-primary/30 hover:bg-page/30"
+                >
+                  <Phone className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-foreground">{SUPPORT_CONTACT.phone}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{SUPPORT_CONTACT.phoneHours}</p>
+                  </div>
+                </a>
+                <a
+                  href={`mailto:${SUPPORT_CONTACT.email}`}
+                  className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:border-primary/30 hover:bg-page/30"
+                >
+                  <Mail className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-foreground">{SUPPORT_CONTACT.email}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">영업일 기준 1~2일 내 답변</p>
+                  </div>
+                </a>
+              </div>
+            </CardShell>
           </div>
-          <div className="rounded-xl bg-page/50 border border-border/50 p-4 text-center">
-            <p className="text-[11px] text-muted-foreground mb-1">
-              마지막 알림 발생
-            </p>
-            <p className="text-[20px] font-bold text-foreground tabular-nums">
-              {lastAlertTime.split(" ")[1]}
-            </p>
-            <p className="text-[12px] text-muted-foreground mt-0.5">
-              {lastAlertTime.split(" ")[0]}
-            </p>
-          </div>
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-muted-foreground">오늘 알림 수</span>
-              <span className="font-semibold text-foreground">
-                {todayAlerts.length}건
-              </span>
+
+          {/* ══ Right column ══ */}
+          <div className="flex min-w-0 flex-col gap-6">
+            {/* ① 기기 요약 — 정상 동작 중인 기기만 추려 동작·WiFi 아이콘으로 보여준다.
+                조치가 필요한 기기는 여기 올리지 않는다(사용자 페이지 표시 정책). */}
+            <CardShell
+              icon={<Radio className="h-4 w-4" />}
+              iconCls="bg-success/10 text-success"
+              title="기기 요약"
+              action={<LinkButton label={`전체 ${summary.total}대 보기`} onClick={goDevices} />}
+            >
+              {healthy.length === 0 ? (
+                <p className="px-5 py-6 text-[12px] text-muted-foreground">
+                  정상 동작 중인 기기가 없습니다.
+                </p>
+              ) : (
+                <div className="py-2">
+                  {healthy.map((d) => (
+                    <DeviceSummaryRow key={d.id} device={d} onClick={goDevices} />
+                  ))}
+                  {summary.normal > healthy.length && (
+                    <p className="px-5 pb-1 pt-3 text-[11px] text-muted-foreground">
+                      외 {summary.normal - healthy.length}대
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardShell>
+
+            {/* ② 과열 — v2 다크 카드 */}
+            <div className="relative overflow-hidden rounded-2xl bg-[#26266B] text-white shadow-sm">
+              {/* v2 질감 — 28px 그리드 + 하단 대각선 면 */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(0deg,rgba(255,255,255,0.03) 0 1px,transparent 1px 28px),repeating-linear-gradient(90deg,rgba(255,255,255,0.03) 0 1px,transparent 1px 28px)',
+                }}
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%] bg-white/5"
+                style={{ clipPath: 'polygon(0 30%,100% 0,100% 100%,0 100%)' }}
+              />
+              <div className="relative flex items-center gap-2.5 border-b border-white/12 px-5 py-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
+                  <Flame className={`h-4 w-4 ${summary.warning > 0 ? 'text-red-300' : 'text-white/80'}`} />
+                </div>
+                <h3 className="text-[15px] font-bold">과열</h3>
+                {summary.warning > 0 ? (
+                  <span className="ml-auto flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] font-bold text-red-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                    {summary.warning}대 과열
+                  </span>
+                ) : (
+                  <span className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    정상
+                  </span>
+                )}
+              </div>
+
+              <div className="relative px-5 pb-5">
+                <div
+                  className={`mt-4 flex items-center gap-3 rounded-xl border px-4 py-3.5 ${
+                    summary.warning > 0
+                      ? 'border-red-400/25 bg-red-500/15'
+                      : 'border-emerald-400/25 bg-emerald-400/10'
+                  }`}
+                >
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                      summary.warning > 0 ? 'bg-red-500/25' : 'bg-emerald-400/20'
+                    }`}
+                  >
+                    {summary.warning > 0 ? (
+                      <Flame className="h-4 w-4 text-red-300" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4 text-emerald-300" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-bold">
+                      {summary.warning > 0 ? `지금 ${summary.warning}대 과열 중` : '과열 중인 기기 없음'}
+                    </p>
+                    <p className="text-[11px] text-white/50">소속 {summary.total}대 기준</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p
+                      className={`text-[28px] font-bold leading-none tabular-nums ${
+                        overheatWeekTotal > 0 ? 'text-red-300' : 'text-emerald-300'
+                      }`}
+                    >
+                      {overheatQ.isLoading ? '—' : overheatWeekTotal}
+                    </p>
+                    <p className="mt-1 text-[10px] text-white/50">7일 누적</p>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-[11px] text-white/50">
+                    <span>최근 7일 과열 기록</span>
+                    <span className={`font-bold ${overheatWeekTotal > 0 ? 'text-red-300' : 'text-[#5EEAD4]'}`}>
+                      {overheatQ.isLoading ? '—' : `${overheatWeekTotal}건`}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex gap-1.5">
+                    {overheatDays.map((d, i) => (
+                      <div key={i} className="flex-1">
+                        <div
+                          title={`${d.label} ${d.count}건`}
+                          className={`relative h-[22px] overflow-hidden rounded-md ${
+                            d.count >= 5
+                              ? 'bg-red-500/80'
+                              : d.count > 0
+                                ? 'bg-red-400/50'
+                                : d.isToday
+                                  ? 'bg-[rgba(52,211,153,0.28)] shadow-[inset_0_0_0_1.5px_#34D399]'
+                                  : 'bg-[rgba(52,211,153,0.18)]'
+                          } ${d.isToday && d.count > 0 ? 'shadow-[inset_0_0_0_1.5px_#34D399]' : ''}`}
+                        >
+                          {d.isToday && (
+                            <span
+                              aria-hidden
+                              className="hl-sweep absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                            />
+                          )}
+                        </div>
+                        <p
+                          className={`mt-1 text-center text-[10px] ${
+                            d.isToday ? 'font-bold text-[#5EEAD4]' : 'text-white/40'
+                          }`}
+                        >
+                          {d.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-muted-foreground">긴급 알림</span>
-              <span
-                className={`font-semibold ${hasCriticalToday ? "text-destructive" : "text-muted-foreground/40"}`}
-              >
-                {todayAlerts.filter((a) => a.level === "critical").length}건
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-muted-foreground">경고 알림</span>
-              <span className="font-semibold text-warning">
-                {todayAlerts.filter((a) => a.level === "warning").length}건
-              </span>
-            </div>
+
+            {/* ③ 전달받은 알림 */}
+            <CardShell
+              icon={<Bell className="h-4 w-4" />}
+              iconCls={alerts.todayCritical > 0 ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}
+              title="전달받은 알림"
+              action={
+                <span
+                  className={`flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full px-2 text-[12px] font-bold ${
+                    alerts.todayCount > 0 ? 'bg-warning/10 text-warning' : 'bg-page text-muted-foreground'
+                  }`}
+                >
+                  오늘 {alerts.todayCount}
+                </span>
+              }
+            >
+              <div className="p-5">
+                {alertsQ.isLoading ? (
+                  <div className="flex flex-col items-center gap-2 py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+                  </div>
+                ) : alerts.recent.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-8">
+                    <Bell className="h-7 w-7 text-muted-foreground/20" />
+                    <p className="text-[13px] text-muted-foreground">전달받은 알림이 없습니다</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {alerts.recent.map((a) => {
+                      const st = PRIORITY_STYLE[a.priority]
+                      const ms = toMs(a.occurred_at)
+                      const isToday = ms >= kstDayStartMs(nowMs)
+                      return (
+                        <div
+                          key={a.id}
+                          className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-[12px] ${st.box}`}
+                        >
+                          <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${st.dot}`} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-foreground">{ALERT_TYPE_LABEL[a.type]}</p>
+                              <span className={`text-[10px] font-bold ${st.text}`}>
+                                {ALERT_PRIORITY_LABEL[a.priority]}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-muted-foreground">
+                              {a.device ? `${a.device.alias || a.device.mac_address} · ` : ''}
+                              {a.message}
+                            </p>
+                          </div>
+                          <span className="shrink-0 tabular-nums text-muted-foreground">
+                            {isToday ? formatKstTime(ms) : formatKst(ms)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  관리자가 기관으로 전달한 알림만 표시됩니다.
+                </p>
+              </div>
+            </CardShell>
+
+            {/* ④ 브랜드 패널 (디자인 B) */}
+            <BrandPanel footnote={`${zoneName} ${summary.total}대 운영 중`} />
           </div>
         </div>
-      </div>
+      )}
     </div>
-  );
+  )
 }

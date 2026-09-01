@@ -11,6 +11,7 @@
 
 import type { HearingLoop, TelecoilZone } from '@/types/device'
 import type { AlertResponseDto } from '@/types/alert'
+import { kstDayStartMs, toMs } from './kst'
 
 
 export const HOUR_MS = 60 * 60 * 1000
@@ -302,6 +303,37 @@ export const WIFI_AXIS_MIN = -85
 export const WIFI_AXIS_MAX = -30
 /** 백엔드 WifiSignalStatus 경계와 동일 */
 export const WIFI_THRESHOLDS = [-67, -55]
+
+/* ── 과열 요일 버킷 ─────────────────────────────────── */
+
+export interface OverheatDayBucket {
+  /** 요일 한 글자, 오늘은 '오늘' */
+  label: string
+  count: number
+  isToday: boolean
+}
+
+/** 최근 7일 과열 알림을 KST 일 단위 7칸으로 묶는다(옛날→오늘) — 대시보드 미니 요일 바용.
+ *  관리자(전체 알림)와 사용자(전달받은 알림) 카드가 같은 모양을 공유한다. */
+export function overheatDayBuckets(
+  alerts: { occurred_at: string }[],
+  nowMs: number,
+): OverheatDayBucket[] {
+  const todayStart = kstDayStartMs(nowMs)
+  const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토']
+  return Array.from({ length: 7 }, (_, i) => {
+    const start = todayStart - (6 - i) * DAY_MS
+    const end = start + DAY_MS
+    const count = alerts.reduce((n, a) => {
+      const ms = toMs(a.occurred_at)
+      return ms >= start && ms < end ? n + 1 : n
+    }, 0)
+    const isToday = i === 6
+    // KST 요일 = UTC+9 시각의 UTC 요일
+    const label = isToday ? '오늘' : WEEKDAY[new Date(start + 9 * 3600 * 1000).getUTCDay()]
+    return { label, count, isToday }
+  })
+}
 
 /** RSSI → 스트립 내 x 위치(0~1). 축 밖은 잘라낸다. */
 export function wifiAxisPos(rssi: number): number {
