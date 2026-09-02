@@ -14,10 +14,8 @@ import {
   Pencil,
   Check,
   X,
-  CheckCircle,
   AlertTriangle,
   AlertCircle,
-  XCircle,
   Loader2,
 } from 'lucide-react'
 import type { HearingLoop, ConnectionStatus } from '@/types/device'
@@ -328,14 +326,6 @@ export default function UserHearingLoops() {
     return d.mac.toLowerCase().includes(q) || (d.alias ?? '').toLowerCase().includes(q)
   })
 
-  /* 상태 통계 — 24h 미만 꺼짐은 '정상'으로 집계, '연결 끊김'은 24h 이상 미연결만(deriveUserStatus) */
-  const stats = {
-    total: devices.length,
-    normal: devices.filter((d) => deriveUserStatus(d) === 'normal').length,
-    warning: devices.filter((d) => deriveUserStatus(d) === 'warning').length,
-    disconnected: devices.filter((d) => d.status === 'error' || deriveUserStatus(d) === 'disconnected').length,
-  }
-
   return (
     <div className="space-y-6">
       {/* ─── Page Header ─── */}
@@ -344,50 +334,6 @@ export default function UserHearingLoops() {
         <p className="text-sm text-muted-foreground mt-2">
           소속 기관에 등록된 히어링루프의 현재 상태를 조회하고 별칭을 관리할 수 있습니다.
         </p>
-      </div>
-
-      {/* ─── 상태 요약 KPI ─── */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="flex items-center gap-4 rounded-2xl border border-border bg-white p-5 shadow-sm">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
-            <Radio className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <p className="text-[12px] text-muted-foreground">전체 기기</p>
-            <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 rounded-2xl border border-success/20 bg-success/3 p-5 shadow-sm">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-success/10">
-            <CheckCircle className="h-5 w-5 text-success" />
-          </div>
-          <div>
-            <p className="text-[12px] text-muted-foreground">정상</p>
-            <p className="text-2xl font-bold text-success">{stats.normal}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 rounded-2xl border border-warning/20 bg-warning/3 p-5 shadow-sm">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-warning/10">
-            <AlertTriangle className="h-5 w-5 text-warning" />
-          </div>
-          <div>
-            <p className="text-[12px] text-muted-foreground">경고</p>
-            <p className={`text-2xl font-bold ${stats.warning > 0 ? 'text-warning' : 'text-muted-foreground/30'}`}>
-              {stats.warning}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 rounded-2xl border border-destructive/20 bg-destructive/3 p-5 shadow-sm">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/10">
-            <XCircle className="h-5 w-5 text-destructive" />
-          </div>
-          <div>
-            <p className="text-[12px] text-muted-foreground">연결 끊김</p>
-            <p className={`text-2xl font-bold ${stats.disconnected > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
-              {stats.disconnected}
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* ─── 툴바: 검색 · 새로고침 · 지도 보기 ─── */}

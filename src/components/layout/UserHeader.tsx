@@ -28,7 +28,7 @@ export function UserHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-white/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-6 lg:px-12">
         {/* ─── Left: Logo ─── */}
         <NavLink to="/user" className="flex items-center gap-2.5 shrink-0">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">

@@ -6,7 +6,7 @@ export function AdminLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-page">
       <AdminHeader />
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-4 sm:px-6 sm:py-6">
+      <main className="mx-auto w-full max-w-[1600px] flex-1 px-6 py-4 sm:py-6 lg:px-12">
         <Outlet />
       </main>
       <AdminFooter />

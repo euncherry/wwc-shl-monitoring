@@ -3,7 +3,7 @@ import { Radio } from 'lucide-react'
 export function UserFooter() {
   return (
     <footer className="border-t border-border bg-white/60 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-[1600px] flex-col items-center gap-4 px-6 py-6 sm:flex-row sm:justify-between">
+      <div className="mx-auto flex max-w-[1600px] flex-col items-center gap-4 px-6 py-6 sm:flex-row sm:justify-between lg:px-12">
         {/* Left: Brand */}
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10">
