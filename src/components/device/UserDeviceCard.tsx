@@ -1,5 +1,18 @@
 import { createElement, type ReactNode } from 'react'
-import { Radio, Power, PowerOff, Thermometer, Wifi, WifiOff, Building2, AlertTriangle, ChevronRight } from 'lucide-react'
+import {
+  Radio,
+  Power,
+  PowerOff,
+  Thermometer,
+  Wifi,
+  WifiOff,
+  Building2,
+  AlertTriangle,
+  ChevronRight,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUpDown,
+} from 'lucide-react'
 import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { HearingLoop, ConnectionStatus, WifiSignal } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
@@ -224,18 +237,58 @@ export function UserDeviceCard({ device, onClick }: { device: HearingLoop; onCli
 const U_HEAD = 'px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
 const U_HEAD_C = 'px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
 
-export function UserDeviceTableHead() {
+/** 헤더 클릭으로 정렬 가능한 컬럼 — 관리자 테이블과 같은 두 가지 */
+export type UserSortKey = 'name' | 'updated'
+export type UserSortDir = 'asc' | 'desc'
+
+export function UserDeviceTableHead({
+  sortKey,
+  sortDir = 'desc',
+  onSort,
+}: {
+  sortKey?: UserSortKey
+  /** 없으면 정렬 UI를 렌더하지 않는다(조회 전용 테이블) */
+  sortDir?: UserSortDir
+  onSort?: (key: UserSortKey) => void
+} = {}) {
+  /** 정렬 헤더 셀 — 비활성일 땐 옅은 ↕ 힌트, 활성일 땐 방향 화살표 */
+  function SortHead({ column, label, hint }: { column: UserSortKey; label: string; hint: string }) {
+    if (!onSort) return <>{label}</>
+    const active = sortKey === column
+    const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ChevronsUpDown
+    return (
+      <button
+        onClick={() => onSort(column)}
+        title={active ? hint : '클릭하여 정렬'}
+        className={`group -mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground ${
+          active ? 'text-primary' : ''
+        }`}
+      >
+        {label}
+        <Icon
+          className={`h-3 w-3 shrink-0 transition-colors ${
+            active ? 'text-primary' : 'text-muted-foreground/30 group-hover:text-muted-foreground'
+          }`}
+        />
+      </button>
+    )
+  }
+
   return (
     <thead>
       <tr className="border-b border-border bg-page/50">
-        <th className={U_HEAD}>기기</th>
+        <th className={U_HEAD}>
+          <SortHead column="name" label="기기" hint={sortDir === 'asc' ? '가나다순' : '가나다 역순'} />
+        </th>
         <th className={U_HEAD}>텔레코일존</th>
         <th className={U_HEAD_C}>전원</th>
         <th className={U_HEAD_C}>동작</th>
         <th className={U_HEAD_C}>WiFi</th>
         <th className={U_HEAD_C}>과열</th>
         <th className={U_HEAD_C}>펌웨어</th>
-        <th className={U_HEAD}>최근 업데이트</th>
+        <th className={U_HEAD}>
+          <SortHead column="updated" label="최근 업데이트" hint={sortDir === 'asc' ? '오래된순' : '최신순'} />
+        </th>
         <th className="w-12 px-5 py-3" />
       </tr>
     </thead>

@@ -1,4 +1,4 @@
-import { createElement, useState } from 'react'
+import { createElement, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import {
   Radio,
@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Map as MapIcon,
   List,
+  ArrowUpDown,
   Pencil,
   Check,
   X,
@@ -31,6 +32,8 @@ import {
   displayTitle,
   UserDeviceTableHead,
   UserDeviceTableRow,
+  type UserSortKey,
+  type UserSortDir,
 } from '@/components/device/UserDeviceCard'
 import { DeviceMap } from '@/components/map/DeviceMap'
 import { userMapStatus } from '@/lib/userDashboard'
@@ -41,6 +44,32 @@ import { userMapStatus } from '@/lib/userDashboard'
       @/lib/userDeviceDisplay (판정) · @/components/device/UserDeviceCard (표시)
       → 표시 규격 실증 페이지(/status-spec)가 같은 소스를 렌더한다. 여기서 재정의 금지.
    ══════════════════════════════════════════════════════ */
+
+/* ── 목록 정렬 ── (관리자 테이블과 같은 규격)
+   기준을 새로 고르면 그 기준에 자연스러운 방향으로 시작한다 — 이름은 가나다순, 날짜는 최신순.
+   메뉴를 옮겼다 돌아와도 유지되도록 localStorage에 담는다. */
+
+interface SortState { key: UserSortKey; dir: UserSortDir }
+
+const SORT_STORAGE_KEY = 'hl-user-device-sort-v1'
+const DEFAULT_SORT: SortState = { key: 'updated', dir: 'desc' }
+const DEFAULT_DIR: Record<UserSortKey, UserSortDir> = { name: 'asc', updated: 'desc' }
+
+/** 기준별 방향 라벨 — 모바일 정렬 컨트롤에 쓴다("최신순"이 무엇 기준인지 헷갈리지 않게) */
+const SORT_META: Record<UserSortKey, { label: string; asc: string; desc: string }> = {
+  name: { label: '이름', asc: '가나다순', desc: '가나다 역순' },
+  updated: { label: '최근 업데이트', asc: '오래된순', desc: '최신순' },
+}
+
+function loadSort(): SortState {
+  try {
+    const raw = localStorage.getItem(SORT_STORAGE_KEY)
+    if (!raw) return DEFAULT_SORT
+    const p = JSON.parse(raw) as SortState
+    if (p && (p.key === 'name' || p.key === 'updated') && (p.dir === 'asc' || p.dir === 'desc')) return p
+  } catch { /* 파싱 실패 시 기본값 */ }
+  return DEFAULT_SORT
+}
 
 /* ── Detail Modal ── */
 
@@ -315,16 +344,37 @@ export default function UserHearingLoops() {
   const [selectedDevice, setSelectedDevice] = useState<HearingLoop | null>(null)
   const [listSpin, setListSpin] = useState(0) // 새로고침 클릭마다 +1 → 아이콘 1회전
   const [view, setView] = useState<'list' | 'map'>('list')
+  const [sort, setSort] = useState<SortState>(loadSort)
+
+  useEffect(() => {
+    try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(sort)) } catch { /* 무시 */ }
+  }, [sort])
+
+  /** 헤더 클릭 — 같은 컬럼이면 방향 반전, 다른 컬럼이면 그 기준의 기본 방향 */
+  const handleHeadSort = (key: UserSortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: DEFAULT_DIR[key] }))
 
   /* 소속 기관 기기 (ZONE_USER는 GET /devices가 자동 필터) */
   const { data: devices = [], isLoading, isError, isFetching, refetch } = useDevices()
 
-  /* 검색 필터 (별칭·MAC) */
-  const filteredDevices = devices.filter((d) => {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return d.mac.toLowerCase().includes(q) || (d.alias ?? '').toLowerCase().includes(q)
-  })
+  /* 검색 필터(별칭·MAC) + 정렬. 지도 뷰도 같은 목록을 쓴다 */
+  const filteredDevices = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const list = devices.filter(
+      (d) => !q || d.mac.toLowerCase().includes(q) || (d.alias ?? '').toLowerCase().includes(q),
+    )
+    const sign = sort.dir === 'asc' ? 1 : -1
+    return list.sort((a, b) => {
+      if (sort.key === 'name') {
+        // 별칭 있는 기기를 먼저 가나다순 → 별칭 없는(MAC 표시) 기기는 뒤로 (관리자와 같은 규칙)
+        const aHas = Boolean(a.alias?.trim())
+        const bHas = Boolean(b.alias?.trim())
+        if (aHas !== bHas) return aHas ? -1 : 1
+        return sign * displayTitle(a).localeCompare(displayTitle(b), 'ko')
+      }
+      return sign * (new Date(a.lastUpdated).getTime() - new Date(b.lastUpdated).getTime())
+    })
+  }, [devices, search, sort])
 
   return (
     <div className="space-y-6">
@@ -348,6 +398,30 @@ export default function UserHearingLoops() {
             className="w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-4 text-[13px] text-foreground transition-all placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
+
+        {/* 모바일 전용 정렬 — 카드 목록엔 테이블 헤더가 없어 기준·방향을 따로 준다 */}
+        <select
+          value={sort.key}
+          onChange={(e) => {
+            const key = e.target.value as UserSortKey
+            setSort({ key, dir: DEFAULT_DIR[key] })
+          }}
+          aria-label="정렬 기준"
+          className="w-full cursor-pointer rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 md:hidden"
+        >
+          {(Object.keys(SORT_META) as UserSortKey[]).map((k) => (
+            <option key={k} value={k}>
+              {SORT_META[k].label}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => setSort({ ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground transition-colors hover:text-foreground md:hidden"
+        >
+          <ArrowUpDown className="h-3.5 w-3.5" />
+          {SORT_META[sort.key][sort.dir]}
+        </button>
 
         <button
           onClick={() => { setListSpin((n) => n + 1); refetch() }}
@@ -417,7 +491,7 @@ export default function UserHearingLoops() {
           <div className="hidden overflow-hidden rounded-2xl border border-border bg-white shadow-sm md:block">
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full">
-                <UserDeviceTableHead />
+                <UserDeviceTableHead sortKey={sort.key} sortDir={sort.dir} onSort={handleHeadSort} />
                 <tbody className="divide-y divide-border/40">
                   {filteredDevices.map((device) => (
                     <UserDeviceTableRow
