@@ -190,13 +190,9 @@ export default function UserSupport() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[12px] text-muted-foreground mb-1">전화</p>
+              {/* 읽기 전용 표기 — 링크·hover·커서 변화 없음(데스크톱에서 tel/mailto는 대개 동작하지 않는다) */}
               <div className="flex items-center gap-2.5">
-                <a
-                  href={`tel:${supportContact.phone}`}
-                  className="text-[14px] font-semibold text-primary hover:text-primary-dark transition-colors"
-                >
-                  {supportContact.phone}
-                </a>
+                <span className="text-[14px] font-semibold text-foreground">{supportContact.phone}</span>
                 <span className="rounded-full bg-page px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                   {supportContact.phoneHours}
                 </span>
@@ -211,12 +207,7 @@ export default function UserSupport() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[12px] text-muted-foreground mb-1">이메일</p>
-              <a
-                href={`mailto:${supportContact.email}`}
-                className="text-[14px] font-semibold text-primary hover:text-primary-dark transition-colors"
-              >
-                {supportContact.email}
-              </a>
+              <span className="text-[14px] font-semibold text-foreground">{supportContact.email}</span>
             </div>
           </div>
         </div>
