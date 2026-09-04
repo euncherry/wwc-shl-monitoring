@@ -133,8 +133,8 @@ export default function UserSupport() {
                 />
 
                 {/* 영상 정보 */}
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
                     <h4 className="text-[15px] font-bold text-foreground">
                       {guide.title}
                     </h4>
@@ -146,9 +146,9 @@ export default function UserSupport() {
                     href={`https://youtu.be/${guide.youtubeId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 shrink-0 rounded-lg border border-border px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-page hover:text-foreground transition-colors"
+                    className="flex shrink-0 items-center gap-2 rounded-xl border border-border px-5 py-3 text-[14px] font-bold text-muted-foreground transition-colors hover:bg-page hover:text-foreground"
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <ExternalLink className="h-[18px] w-[18px]" />
                     YouTube에서 보기
                   </a>
                 </div>
