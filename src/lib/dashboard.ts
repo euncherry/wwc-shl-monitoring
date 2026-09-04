@@ -235,7 +235,7 @@ export function buildZoneRows(
 
   const rowFor = (id: string | null, name: string, managerEmail: string | null): ZoneRow => {
     const mine = devices.filter((d) => (id === null ? !d.telecoilZoneId : d.telecoilZoneId === id))
-    const online = mine.filter((d) => d.connectionStatus === 'ONLINE').length
+    const online = mine.filter(isAdminLive).length
     const fault = mine.filter((d) => {
       if (d.connectionStatus !== 'OFFLINE' || d.provisionStatus === 'PENDING') return false
       const since = offlineSince(d)

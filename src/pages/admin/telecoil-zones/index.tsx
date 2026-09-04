@@ -41,6 +41,7 @@ import { DeviceDetailModal } from '@/pages/admin/hearing-loops'
 import { OtaUpdateModal } from '@/pages/admin/hearing-loops/OtaUpdateModal'
 import { useAlerts } from '@/hooks/useAlerts'
 import { ALERT_TYPE_LABEL, type AlertResponseDto, type AlertPriorityEnum } from '@/types/alert'
+import { ZONE_HEALTHY_PCT } from '@/lib/zoneMapper'
 
 /* ══════════════════════════════════════════════════════
    유틸 / Sub-components
@@ -797,8 +798,9 @@ export default function TelecoilZonesPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredZones.map((zone) => {
                 const rate = zone.deviceCount > 0 ? Math.round((zone.activeDeviceCount / zone.deviceCount) * 100) : 0
-                const rateColor = rate === 100 ? 'bg-success' : rate >= 80 ? 'bg-primary' : rate >= 60 ? 'bg-warning' : 'bg-destructive'
-                const rateTextColor = rate === 100 ? 'text-success' : rate >= 80 ? 'text-primary' : rate >= 60 ? 'text-warning' : 'text-destructive'
+                /* 색 구간은 상태 뱃지(deriveZoneStatus)와 같은 기준 — 한 카드 안에서 어긋나지 않게 */
+                const rateColor = rate >= ZONE_HEALTHY_PCT ? 'bg-success' : rate >= 60 ? 'bg-warning' : 'bg-destructive'
+                const rateTextColor = rate >= ZONE_HEALTHY_PCT ? 'text-success' : rate >= 60 ? 'text-warning' : 'text-destructive'
                 const borderAccent = zone.status === 'active' ? 'border-success/20' : zone.status === 'warning' ? 'border-warning/20' : 'border-border'
                 return (
                   <div key={zone.id} className={`rounded-xl border ${borderAccent} group cursor-pointer bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-lg`} onClick={() => setSelectedZoneId(Number(zone.id))}>

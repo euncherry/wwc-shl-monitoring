@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { zonesApi } from '@/api/zones'
 import { toTelecoilZone } from '@/lib/zoneMapper'
 import { useDevices } from './useDevices'
+import { isAdminLive } from '@/lib/adminDeviceDisplay'
+import type { HearingLoop } from '@/types/device'
 
 export const zoneKeys = {
   all: ['zones'] as const,
@@ -10,14 +12,16 @@ export const zoneKeys = {
   detail: (id: number) => [...zoneKeys.all, 'detail', id] as const,
 }
 
-/** zone_id별 { 전체 기기 수, 정상가동(ONLINE) 수 } 맵 (GET /devices의 connection_status 파생) */
-function countByZone(devices: { telecoilZoneId: string | null; connectionStatus: string }[] | undefined) {
+/** zone_id별 { 전체 기기 수, 정상가동 수 } 맵 (GET /devices 파생).
+ *  ⚠️ 가동 판정은 관리자 표시 정책(isAdminLive — 미연결 24h 유예)을 따른다.
+ *     connection_status 원값으로 세면 기기 목록은 '정상 가동'인데 존 가동률만 낮게 나온다. */
+function countByZone(devices: HearingLoop[] | undefined) {
   const map = new Map<string, { total: number; online: number }>()
   for (const d of devices ?? []) {
     if (!d.telecoilZoneId) continue
     const e = map.get(d.telecoilZoneId) ?? { total: 0, online: 0 }
     e.total += 1
-    if (d.connectionStatus === 'ONLINE') e.online += 1
+    if (isAdminLive(d)) e.online += 1
     map.set(d.telecoilZoneId, e)
   }
   return map
@@ -66,7 +70,7 @@ export function useZone(id: number | undefined) {
   const data = useMemo(() => {
     if (!zoneQ.data) return undefined
     const devices = (devicesQ.data ?? []).filter((d) => d.telecoilZoneId === String(zoneQ.data.id))
-    const online = devices.filter((d) => d.connectionStatus === 'ONLINE').length
+    const online = devices.filter(isAdminLive).length
     return { zone: toTelecoilZone(zoneQ.data, devices.length, online), devices }
   }, [zoneQ.data, devicesQ.data])
 
