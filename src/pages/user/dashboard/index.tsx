@@ -331,9 +331,6 @@ export default function UserDashboard() {
                   value={`${summary.normalPct}%`}
                   tone={summary.normalPct === 100 ? 'success' : summary.normalPct >= 80 ? 'muted' : 'danger'}
                 />
-                <span className="ml-auto text-[11px] text-muted-foreground">
-                  48시간 미만 꺼짐은 정상으로 집계(일과 후 소등·주말 휴관 포함)
-                </span>
               </div>
               <DeviceMap
                 devices={devices}
@@ -352,9 +349,6 @@ export default function UserDashboard() {
               icon={<Wifi className="h-4 w-4" />}
               iconCls={wifi.weak ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}
               title="Wi-Fi 신호"
-              action={
-                <span className="shrink-0 text-[11px] text-muted-foreground">연결된 {wifi.connected}대 기준</span>
-              }
             >
               {wifi.connected === 0 ? (
                 <p className="px-5 py-6 text-[12px] text-muted-foreground">연결된 기기가 없습니다.</p>
@@ -478,19 +472,12 @@ export default function UserDashboard() {
                     </span>
                     <p className="truncate text-[12px] font-extrabold text-foreground">해결되지 않으면 문의</p>
                   </div>
-                  <a
-                    href={`tel:${SUPPORT_CONTACT.phone}`}
-                    className="block text-[12px] font-extrabold tabular-nums text-[#132B52] transition-colors hover:text-primary"
-                  >
+                  {/* 읽기 전용 표기 — 링크·hover·커서 변화 없음 (tel/mailto는 데스크톱에서 대개 동작하지 않는다) */}
+                  <p className="text-[12px] font-extrabold tabular-nums text-[#132B52]">
                     {SUPPORT_CONTACT.phone}
                     <span className="ml-1 text-[10.5px] font-normal text-[#8794A6]">{SUPPORT_CONTACT.phoneHours}</span>
-                  </a>
-                  <a
-                    href={`mailto:${SUPPORT_CONTACT.email}`}
-                    className="mt-0.5 block truncate text-[10.5px] text-[#5C6B80] transition-colors hover:text-primary"
-                  >
-                    {SUPPORT_CONTACT.email}
-                  </a>
+                  </p>
+                  <p className="mt-0.5 truncate text-[10.5px] text-[#5C6B80]">{SUPPORT_CONTACT.email}</p>
                 </div>
               </div>
             </CardShell>

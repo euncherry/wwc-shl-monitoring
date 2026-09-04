@@ -277,9 +277,6 @@ export default function AdminDashboard() {
               <StatChip label="정상 가동" value={summary.online} tone="success" />
               <StatChip label="장애" value={summary.buckets.fault} tone="danger" />
               <StatChip label="미배정" value={summary.unassigned} />
-              <span className="ml-auto text-[11px] text-muted-foreground">
-                24시간 미만 미연결은 가동 중으로 집계(야간 소등·주말 휴관 포함)
-              </span>
             </div>
             <DeviceMap
               devices={devices}
@@ -295,7 +292,6 @@ export default function AdminDashboard() {
             icon={<Wifi className="h-4 w-4" />}
             iconCls={wifi.weak ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}
             title="Wi-Fi 신호"
-            action={<span className="shrink-0 text-[11px] text-muted-foreground">연결된 {wifi.connected}대 기준</span>}
           >
             {wifi.connected === 0 ? (
               <p className="px-5 py-6 text-[12px] text-muted-foreground">연결된 기기가 없습니다.</p>
