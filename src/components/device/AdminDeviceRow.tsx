@@ -18,12 +18,14 @@ import type { HearingLoop } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime } from '@/lib/format'
+import { adminDisplay } from '@/lib/adminDeviceDisplay'
 
 /* ══════════════════════════════════════════════════════
    관리자 히어링루프 목록 표시 컴포넌트 (테이블 행 / 모바일 카드).
    /admin/hearing-loops 와 표시 규격 실증 페이지(/status-spec)가 공유한다 —
    실증 페이지가 실제 화면과 어긋나지 않도록 마크업은 반드시 여기 한 곳에만 둔다.
-   ⚠️ 관리자 화면은 실시간 그대로 표시한다(사용자 페이지의 4h/24h 유예 정책 미적용).
+   ⚠️ 미연결 24시간까지는 전원·동작을 정상으로 연출하고 WiFi만 '끊김'으로 보인다
+      (lib/adminDeviceDisplay). 사용자 페이지 정책(48시간·과열까지 가림)과는 별개다.
    ══════════════════════════════════════════════════════ */
 
 /** 별칭 있으면 별칭, 없으면 MAC */
@@ -140,6 +142,10 @@ interface RowProps {
 /** 관리자 목록 테이블 행 — ⚠️ <table><tbody> 안에서만 렌더 가능 */
 export function AdminDeviceTableRow({ device, onClick, otaMode, otaChecked, onToggleOta }: RowProps) {
   const hasAlias = Boolean(device.alias?.trim())
+  /* 24h 미만 미연결은 전원 ON·동작 정상으로 연출, WiFi만 '끊김' (adminDeviceDisplay 참고) */
+  const { alive, dispConn, wifiSignal } = adminDisplay(device)
+  /** 지금 실제로 붙어 있는가 — RSSI·SSID는 이때만 살아 있는 값이다 */
+  const connected = device.connectionStatus !== 'OFFLINE'
   return (
     <tr
       className="transition-colors hover:bg-main-blue-1/10 cursor-pointer group"
@@ -177,26 +183,29 @@ export function AdminDeviceTableRow({ device, onClick, otaMode, otaChecked, onTo
           <span className="text-[12px] text-warning font-semibold">미배정</span>
         )}
       </td>
-      <td className="px-5 py-3.5 text-center"><PowerIcon on={device.power} /></td>
-      <td className="px-5 py-3.5 text-center" title={connectionMeta(device.connectionStatus).label}>
+      <td className="px-5 py-3.5 text-center"><PowerIcon on={alive} /></td>
+      <td className="px-5 py-3.5 text-center" title={connectionMeta(dispConn).label}>
         <div className="flex justify-center">
-          {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
+          {createElement(connectionMeta(dispConn).Icon, { className: `h-4 w-4 ${connectionMeta(dispConn).color}` })}
         </div>
       </td>
       <td className="px-5 py-3.5 text-center">
         <div className="flex flex-col items-center gap-0.5">
-          <WifiSignalIcon signal={device.wifiSignal} />
-          {/* 임시: RSSI 원시값(dBm) 표시 — 신호 단계 디버깅용 */}
-          <span className="text-[10px] tabular-nums text-muted-foreground">{device.wifiRssi != null ? `${device.wifiRssi}dBm` : '—'}</span>
+          <WifiSignalIcon signal={wifiSignal} />
+          {/* 임시: RSSI 원시값(dBm) 표시 — 신호 단계 디버깅용.
+              미연결 기기는 유예 구간이든 장애든 실시간 값이 없다(마지막 값이 남아 오해를 부른다) → '—' */}
+          <span className="text-[10px] tabular-nums text-muted-foreground">
+            {connected && device.wifiRssi != null ? `${device.wifiRssi}dBm` : '—'}
+          </span>
           {/* 접속 SSID — 신펌웨어(StatusReport.wifi_ssid) 기기만 값이 있음 */}
-          {device.wifiSsid && (
+          {connected && device.wifiSsid && (
             <span className="max-w-[96px] truncate text-[10px] text-muted-foreground" title={device.wifiSsid}>{device.wifiSsid}</span>
           )}
         </div>
       </td>
       <td className="px-5 py-3.5 text-center">
-        <span className={`text-[13px] font-semibold ${!device.power ? 'text-muted-foreground' : device.overTemperature ? 'text-destructive' : 'text-success'}`}>
-          {!device.power ? '—' : device.overTemperature ? '과열' : '정상'}
+        <span className={`text-[13px] font-semibold ${!alive ? 'text-muted-foreground' : device.overTemperature ? 'text-destructive' : 'text-success'}`}>
+          {!alive ? '—' : device.overTemperature ? '과열' : '정상'}
         </span>
       </td>
       <td className="px-5 py-3.5 text-center">
@@ -228,6 +237,8 @@ export function AdminDeviceTableRow({ device, onClick, otaMode, otaChecked, onTo
 /** 관리자 목록 모바일 카드 (md 미만) */
 export function AdminDeviceMobileCard({ device, onClick, otaMode, otaChecked, onToggleOta }: RowProps) {
   const hasAlias = Boolean(device.alias?.trim())
+  const { alive, dispConn, wifiSignal } = adminDisplay(device)
+  const connected = device.connectionStatus !== 'OFFLINE'
   return (
     <button
       onClick={onClick}
@@ -258,9 +269,9 @@ export function AdminDeviceMobileCard({ device, onClick, otaMode, otaChecked, on
             {hasAlias && <p className="truncate text-[11px] text-muted-foreground font-mono">{device.mac}</p>}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5" title={connectionMeta(device.connectionStatus).label}>
-          {createElement(connectionMeta(device.connectionStatus).Icon, { className: `h-4 w-4 ${connectionMeta(device.connectionStatus).color}` })}
-          <span className={`text-[11px] font-bold ${connectionMeta(device.connectionStatus).color}`}>{connectionMeta(device.connectionStatus).label}</span>
+        <div className="flex shrink-0 items-center gap-1.5" title={connectionMeta(dispConn).label}>
+          {createElement(connectionMeta(dispConn).Icon, { className: `h-4 w-4 ${connectionMeta(dispConn).color}` })}
+          <span className={`text-[11px] font-bold ${connectionMeta(dispConn).color}`}>{connectionMeta(dispConn).label}</span>
         </div>
       </div>
 
@@ -277,18 +288,18 @@ export function AdminDeviceMobileCard({ device, onClick, otaMode, otaChecked, on
       {/* 상태 칩 */}
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
-          <PowerIcon on={device.power} />
-          <span className="font-semibold text-foreground">{device.power ? 'ON' : 'OFF'}</span>
+          <PowerIcon on={alive} />
+          <span className="font-semibold text-foreground">{alive ? 'ON' : 'OFF'}</span>
         </span>
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
-          <WifiSignalIcon signal={device.wifiSignal} />
-          <span className="font-semibold text-foreground">{WIFI_SIGNAL_LABEL[device.wifiSignal]}</span>
-          {device.wifiRssi != null && <span className="tabular-nums text-muted-foreground">{device.wifiRssi}dBm</span>}
-          {device.wifiSsid && <span className="max-w-[110px] truncate text-muted-foreground">{device.wifiSsid}</span>}
+          <WifiSignalIcon signal={wifiSignal} />
+          <span className="font-semibold text-foreground">{WIFI_SIGNAL_LABEL[wifiSignal]}</span>
+          {connected && device.wifiRssi != null && <span className="tabular-nums text-muted-foreground">{device.wifiRssi}dBm</span>}
+          {connected && device.wifiSsid && <span className="max-w-[110px] truncate text-muted-foreground">{device.wifiSsid}</span>}
         </span>
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1">
-          <Thermometer className={`h-3.5 w-3.5 ${!device.power ? 'text-muted-foreground/50' : device.overTemperature ? 'text-destructive' : 'text-success'}`} />
-          <span className={`font-semibold ${!device.power ? 'text-muted-foreground' : device.overTemperature ? 'text-destructive' : 'text-success'}`}>{!device.power ? '—' : device.overTemperature ? '과열' : '정상'}</span>
+          <Thermometer className={`h-3.5 w-3.5 ${!alive ? 'text-muted-foreground/50' : device.overTemperature ? 'text-destructive' : 'text-success'}`} />
+          <span className={`font-semibold ${!alive ? 'text-muted-foreground' : device.overTemperature ? 'text-destructive' : 'text-success'}`}>{!alive ? '—' : device.overTemperature ? '과열' : '정상'}</span>
         </span>
       </div>
 

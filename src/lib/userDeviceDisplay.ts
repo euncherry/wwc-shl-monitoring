@@ -2,7 +2,7 @@ import type { HearingLoop, DeviceStatus } from '@/types/device'
 
 /* ── 유저 페이지 오프라인 표시 정책 (2026-09-02 사용자 결정으로 갱신) ──
    일상적 소등이 문제로 보이지 않게, 미연결 48시간까지는 **전부 정상으로 연출**한다.
-   관리자 페이지는 실시간 그대로.
+   관리자 페이지는 별도 정책(adminDeviceDisplay — 24시간, WiFi만 끊김).
    - 48시간 미만: 전원 ON · 동작 정상 · WiFi 정상 · **과열도 정상**(마지막 실측값을 감춘다)
    - 48시간 이상: 진짜 상태 노출 — 빨간 '연결 끊김' 뱃지 + 전원 OFF · 작동 중지 · '—'
    기준 시각: disconnected_at(백엔드 DTO 노출 요청 중 — BACKEND_REQUIREMENTS §11)

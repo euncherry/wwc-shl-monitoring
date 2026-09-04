@@ -17,6 +17,7 @@ import {
 } from '@/components/device/AdminDeviceRow'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
 import { connectionMeta } from '@/lib/connectionStatus'
+import { adminDisplay } from '@/lib/adminDeviceDisplay'
 import {
   deriveUserStatus,
   isSoftOff,
@@ -156,16 +157,19 @@ function Section({ n, title, items, desc, children }: { n: string; title: string
 
 /** 관리자 페이지에서 해당 항목이 실제로 어떻게 보이는지 (모바일 카드 칩과 동일 표기) */
 function AdminItemView({ item, device }: { item: SpecItem; device: HearingLoop }) {
+  /* 실제 목록과 같은 판정을 통과시킨다 — 원값을 직접 읽으면 이 페이지가 화면과 어긋난다 */
+  const { alive, dispConn, wifiSignal } = adminDisplay(device)
+  const connected = device.connectionStatus !== 'OFFLINE'
   if (item === 'power') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1 text-[11px]">
-        <PowerIcon on={device.power} />
-        <span className="font-semibold text-foreground">{device.power ? 'ON' : 'OFF'}</span>
+        <PowerIcon on={alive} />
+        <span className="font-semibold text-foreground">{alive ? 'ON' : 'OFF'}</span>
       </span>
     )
   }
   if (item === 'operation') {
-    const m = connectionMeta(device.connectionStatus)
+    const m = connectionMeta(dispConn)
     return (
       <span className="inline-flex items-center gap-1.5">
         {createElement(m.Icon, { className: `h-4 w-4 ${m.color}` })}
@@ -175,9 +179,11 @@ function AdminItemView({ item, device }: { item: SpecItem; device: HearingLoop }
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-border bg-page/50 px-2 py-1 text-[11px]">
-      <WifiSignalIcon signal={device.wifiSignal} />
-      <span className="font-semibold text-foreground">{WIFI_SIGNAL_LABEL[device.wifiSignal]}</span>
-      {device.wifiRssi != null && <span className="tabular-nums text-muted-foreground">{device.wifiRssi}dBm</span>}
+      <WifiSignalIcon signal={wifiSignal} />
+      <span className="font-semibold text-foreground">{WIFI_SIGNAL_LABEL[wifiSignal]}</span>
+      {connected && device.wifiRssi != null && (
+        <span className="tabular-nums text-muted-foreground">{device.wifiRssi}dBm</span>
+      )}
     </span>
   )
 }
@@ -292,7 +298,7 @@ function ItemPolicySection({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
-          <PolicyTable head="관리자 페이지 — 실시간 그대로" rows={adminRows.map((r) => ({ label: r.label, view: <AdminItemView item={item} device={r.device} /> }))} />
+          <PolicyTable head="관리자 페이지 — 24시간 유예 (WiFi만 끊김)" rows={adminRows.map((r) => ({ label: r.label, view: <AdminItemView item={item} device={r.device} /> }))} />
           <p className="mt-2 px-1 text-[12px] leading-relaxed text-muted-foreground">{adminNote}</p>
         </div>
         <div>
@@ -539,9 +545,10 @@ export default function StatusSpecPage() {
           {/* 역할별 정책 요약 */}
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-[12px] font-bold text-foreground">관리자 페이지 — 실시간 그대로</p>
+              <p className="text-[12px] font-bold text-foreground">관리자 페이지 — 미연결 지속 시간 기준 2단계</p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                연결이 끊기면 즉시 전원 OFF·작동 중지로 표시(운영·점검용).
+                24시간 미만은 전원 ON·동작 정상으로 두고 <b className="font-semibold">WiFi만 '끊김'</b> ·
+                24시간 이상만 전원 OFF·작동 중지. 목록·지도·KPI·가동률이 모두 같은 기준을 쓴다.
               </p>
             </div>
             <div className="rounded-xl border border-border px-4 py-3">
@@ -570,7 +577,7 @@ export default function StatusSpecPage() {
               <span className="font-mono font-semibold">connection_status</span>를 갱신한다. 연결은 전원이 인가된 상태에서만 성립하므로 전원 판정의 확정 지표로 사용한다.
             </>
           }
-          adminNote="연결이 끊기면 즉시 OFF로 표시합니다. 목록 표에서는 공간상 아이콘만, 상세 모달·모바일 카드에서는 위와 같이 'ON/OFF' 라벨을 함께 표시합니다."
+          adminNote="미연결 24시간까지는 ON으로 두고, 24시간을 넘기면 OFF로 표시합니다. 목록 표에서는 공간상 아이콘만, 상세 모달·모바일 카드에서는 위와 같이 'ON/OFF' 라벨을 함께 표시합니다."
           adminRows={[
             { label: '연결 중', device: stages[0].device },
             { label: '연결 끊김 (즉시)', device: stages[1].device },
@@ -593,7 +600,7 @@ export default function StatusSpecPage() {
             </>
           }
           extra={<OperationThresholdBlock />}
-          adminNote="연결이 끊기면 즉시 '작동 중지'로 표시합니다. 펌웨어 원격 업데이트(OTA)가 진행 중이면 '업데이트 중'으로 구분됩니다."
+          adminNote="미연결 24시간까지는 '정상 작동'으로 두고, 24시간을 넘기면 '작동 중지'로 표시합니다. 펌웨어 원격 업데이트(OTA)가 진행 중이면 '업데이트 중'으로 구분됩니다."
           adminRows={[
             { label: 'ONLINE', device: connCases[0] },
             { label: 'UPDATING', device: connCases[1] },
@@ -616,7 +623,7 @@ export default function StatusSpecPage() {
               (<span className="font-mono font-semibold">wifi_signal</span>)으로 산출한다 — 강함(≥ -55dBm) / 보통(-67 ~ -55) / 약함(&lt; -67) / 끊김(연결 해제·RSSI 미수신).
             </>
           }
-          adminNote="등급 아이콘에 색상을 적용하고 라벨과 RSSI 원시값(dBm)을 함께 표시합니다. 연결이 끊기면 즉시 '끊김'."
+          adminNote="등급 아이콘에 색상을 적용하고 라벨과 RSSI 원시값(dBm)을 함께 표시합니다. 연결이 끊기면 유예 구간에도 즉시 '끊김'(dBm은 '—') — 관리자가 미연결을 알아챌 수 있는 유일한 신호다."
           adminRows={[
             { label: '강함 (≥ -55dBm)', device: wifiCases[0] },
             { label: '보통 (-67 ~ -55)', device: wifiCases[1] },

@@ -3,6 +3,7 @@ import { Loader2, MapPin, AlertCircle } from 'lucide-react'
 import type { HearingLoop, ConnectionStatus } from '@/types/device'
 import { loadKakaoMap } from '@/lib/kakaoMapLoader'
 import { connectionMeta } from '@/lib/connectionStatus'
+import { adminDisplay } from '@/lib/adminDeviceDisplay'
 import { formatDateTime } from '@/lib/format'
 
 /* ══════════════════════════════════════════════════════
@@ -42,19 +43,16 @@ export interface MapStatusDisplay {
 
 export type MapStatusResolver = (device: HearingLoop) => MapStatusDisplay
 
-/** 기본 규격(관리자) — connection_status 원값 그대로. 실시간 상태를 숨기지 않는다.
+/** 기본 규격(관리자) — 미연결 24시간까지는 정상 작동으로 연출한다(lib/adminDeviceDisplay).
+ *  ⚠️ 같은 화면의 KPI·목록과 같은 판정을 써야 마커와 숫자가 어긋나지 않는다.
  *  (export하지 않는다 — react-refresh 규칙상 컴포넌트 파일은 컴포넌트만 내보낸다) */
 const realtimeMapStatus: MapStatusResolver = (device) => {
-  const conn = connectionMeta(device.connectionStatus)
+  const { dispConn } = adminDisplay(device)
+  const conn = connectionMeta(dispConn)
   return {
-    kind: markerKind(device.connectionStatus),
+    kind: markerKind(dispConn),
     label: conn.label,
-    color:
-      device.connectionStatus === 'OFFLINE'
-        ? '#64748b'
-        : device.connectionStatus === 'UPDATING'
-          ? '#246BD1'
-          : '#10b981',
+    color: dispConn === 'OFFLINE' ? '#64748b' : dispConn === 'UPDATING' ? '#246BD1' : '#10b981',
   }
 }
 

@@ -19,13 +19,12 @@ import { BrandPanel } from '@/components/dashboard/BrandPanel'
 import { kstBannerDate, formatKstTime, toMs } from '@/lib/kst'
 import { useDevices } from '@/hooks/useDevices'
 import { useZones } from '@/hooks/useZones'
-import { useAlerts, useAlertThresholds } from '@/hooks/useAlerts'
+import { useAlerts } from '@/hooks/useAlerts'
 import { useOverheatAlerts } from '@/hooks/useOverheatAlerts'
 import { DeviceMap } from '@/components/map/DeviceMap'
 import { DeviceDetailModal } from '@/pages/admin/hearing-loops'
 import type { HearingLoop } from '@/types/device'
 import {
-  HOUR_MS,
   buildOverheatSummary,
   buildPipeline,
   buildZoneRows,
@@ -175,15 +174,11 @@ export default function AdminDashboard() {
   const { data: devices = [], isLoading: devicesLoading } = useDevices()
   const { data: zones = [] } = useZones()
   const { data: alertStats } = useAlerts({ limit: 1 })
-  const { data: thresholds } = useAlertThresholds()
   const overheatQ = useOverheatAlerts()
 
   // 렌더마다 흔들리지 않도록 마운트 시점으로 고정
   const nowMs = useMemo(() => Date.now(), [])
-  /** '확인 필요' 구간의 시작 — 백엔드 CONNECTION_LOST 임계(알림 설정에서 변경 가능)를 그대로 따른다 */
-  const watchMs = (thresholds?.connection_lost_hours ?? 4) * HOUR_MS
-
-  const summary = useMemo(() => summarizeDevices(devices, nowMs, watchMs), [devices, nowMs, watchMs])
+  const summary = useMemo(() => summarizeDevices(devices, nowMs), [devices, nowMs])
   const wifi = useMemo(() => summarizeWifi(devices), [devices])
   const pipeline = useMemo(() => buildPipeline(devices), [devices])
   const firmware = useMemo(() => summarizeFirmware(devices), [devices])
@@ -226,7 +221,6 @@ export default function AdminDashboard() {
   }, [devices])
 
   const hotNow = overheat.currentDevices.length
-  const watchHours = thresholds?.connection_lost_hours ?? 4
 
   return (
     <div className="space-y-6">
@@ -239,7 +233,7 @@ export default function AdminDashboard() {
           <>
             전체 <b className="font-bold">{summary.total}대</b> 중{' '}
             <b className="font-bold text-[#0E9F6E]">{summary.online}대</b>가 가동 중이며, 조치가 필요한 기기가{' '}
-            <b className="font-bold text-destructive">{summary.buckets.watch + summary.buckets.fault}대</b> 있습니다.
+            <b className="font-bold text-destructive">{summary.buckets.fault}대</b> 있습니다.
           </>
         }
         actions={
@@ -281,11 +275,10 @@ export default function AdminDashboard() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-6 py-2.5 border-b border-border bg-page/40">
               <StatChip label="전체" value={summary.total} />
               <StatChip label="정상 가동" value={summary.online} tone="success" />
-              <StatChip label="확인 필요" value={summary.buckets.watch} tone="warning" />
               <StatChip label="장애" value={summary.buckets.fault} tone="danger" />
               <StatChip label="미배정" value={summary.unassigned} />
               <span className="ml-auto text-[11px] text-muted-foreground">
-                확인 필요 {watchHours}시간+ · 장애 24시간+ 미연결
+                24시간 미만 미연결은 가동 중으로 집계(야간 소등·주말 휴관 포함)
               </span>
             </div>
             <DeviceMap

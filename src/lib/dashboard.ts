@@ -10,6 +10,7 @@
  */
 
 import type { HearingLoop, TelecoilZone } from '@/types/device'
+import { isAdminLive } from './adminDeviceDisplay'
 import type { AlertResponseDto } from '@/types/alert'
 import { kstDayStartMs, toMs } from './kst'
 
@@ -21,21 +22,16 @@ export const DAY_MS = 24 * HOUR_MS
 export const OVERHEAT_RECENT_MS = DAY_MS
 export const OVERHEAT_WINDOW_MS = 7 * DAY_MS
 
-/** 미연결 '장애' 승격 — **관리자 화면 기준 24시간**.
- *  ⚠️ 유저 페이지 정책(userDeviceDisplay.DISCONNECT_ALERT_MS)은 2026-09-02에 48시간으로 분기했다.
- *     관리자는 운영·점검용이라 더 짧게 유지한다. 두 값을 다시 묶지 말 것. */
+/** 미연결 '장애' 승격 — 관리자 표시 정책(adminDeviceDisplay.ADMIN_GRACE_MS)과 같은 24시간.
+ *  ⚠️ 유저 페이지는 48시간(userDeviceDisplay.DISCONNECT_ALERT_MS). 두 값을 묶지 말 것. */
 export const OFFLINE_FAULT_MS = DAY_MS
 
 /* ── 기기 상태 요약 ─────────────────────────────────── */
 
 export interface OfflineBuckets {
-  /** 미연결 4h 미만 — 일상 소등 범위 */
-  recent: number
-  /** 4~24h — 확인 필요 */
-  watch: number
-  /** 24h 이상 — 장애 */
+  /** 24h 이상 미연결 — 장애. 그 미만은 표시 정책상 '가동 중'이라 버킷을 두지 않는다 */
   fault: number
-  /** 아직 IoT 프로비저닝 전(한 번도 안 붙은 기기) — 위 셋과 배타 */
+  /** 아직 IoT 프로비저닝 전(한 번도 안 붙은 기기) — fault와 배타 */
   neverSeen: number
 }
 
@@ -58,8 +54,10 @@ export function offlineSince(d: HearingLoop): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
-export function summarizeDevices(devices: HearingLoop[], nowMs: number, watchMs: number): DeviceSummary {
-  const buckets: OfflineBuckets = { recent: 0, watch: 0, fault: 0, neverSeen: 0 }
+/** ⚠️ '가동 중'(online·가동률) 판정은 반드시 adminDeviceDisplay.isAdminLive를 통과시킨다.
+ *  connection_status 원값으로 세면 목록은 '정상 가동'인데 대시보드는 '장애'로 갈린다. */
+export function summarizeDevices(devices: HearingLoop[], nowMs: number): DeviceSummary {
+  const buckets: OfflineBuckets = { fault: 0, neverSeen: 0 }
   let online = 0
   let updating = 0
   let offline = 0
@@ -68,24 +66,22 @@ export function summarizeDevices(devices: HearingLoop[], nowMs: number, watchMs:
   let assigned = 0
 
   for (const d of devices) {
+    const live = isAdminLive(d)
     if (!d.telecoilZoneId) unassigned += 1
     else {
       assigned += 1
-      if (d.connectionStatus === 'ONLINE') assignedOnline += 1
+      if (live) assignedOnline += 1
     }
 
-    if (d.connectionStatus === 'ONLINE') { online += 1; continue }
     if (d.connectionStatus === 'UPDATING') { updating += 1; continue }
+    if (live) { online += 1; continue }
 
     offline += 1
     // 한 번도 붙은 적 없는 기기는 '미연결 시간'이라는 개념이 성립하지 않는다
     if (d.provisionStatus === 'PENDING') { buckets.neverSeen += 1; continue }
     const since = offlineSince(d)
     if (since === null) { buckets.neverSeen += 1; continue }
-    const elapsed = nowMs - since
-    if (elapsed >= OFFLINE_FAULT_MS) buckets.fault += 1
-    else if (elapsed >= watchMs) buckets.watch += 1
-    else buckets.recent += 1
+    if (nowMs - since >= OFFLINE_FAULT_MS) buckets.fault += 1
   }
 
   return {

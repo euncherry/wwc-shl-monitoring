@@ -40,6 +40,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { HearingLoop, DeviceStatusLogDto, DeviceLogDto, DeviceLogLevel, DeviceErrorLog } from '@/types/device'
 import { WifiSignalIcon, WIFI_SIGNAL_LABEL } from '@/components/WifiSignalIcon'
+import { isAdminLive } from '@/lib/adminDeviceDisplay'
 import { connectionMeta } from '@/lib/connectionStatus'
 import { formatDateTime, formatDateTimeSec } from '@/lib/format'
 import {
@@ -2052,7 +2053,7 @@ export default function HearingLoopsPage() {
                           <DayDivider
                             dayKey={group.dayKey}
                             total={group.items.length}
-                            online={group.items.filter((d) => d.connectionStatus === 'ONLINE').length}
+                            online={group.items.filter(isAdminLive).length}
                           />
                         </td>
                       </tr>
@@ -2103,7 +2104,7 @@ export default function HearingLoopsPage() {
                       <DayDivider
                         dayKey={group.dayKey}
                         total={group.items.length}
-                        online={group.items.filter((d) => d.connectionStatus === 'ONLINE').length}
+                        online={group.items.filter(isAdminLive).length}
                       />
                     </div>
                   )}
